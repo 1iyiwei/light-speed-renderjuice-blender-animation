@@ -13,16 +13,16 @@ world shader only shows the Milky Way background (which has those stars
 removed).
 
 Each star at star-frame direction d (angle t to the motion direction) is moved
-to the direction seen from the plane,
-    cos t' = (cos t + beta) / (1 + beta cos t),
-with Doppler factor D = gamma (1 + beta cos t). A point source's flux
+to the direction seen from the plane, tan(t'/2) = exp(-phi) tan(t/2), with
+Doppler factor D = gamma (1 + beta cos t) (both computed by boost() in
+build_sky_shader.py, in terms of the rapidity phi). A point source's flux
 scales by D ** (k - 2): surface brightness goes as D ** k (see
 build_sky_shader.py), and the solid angle around it shrinks by D ** 2. Its
 color is a blackbody at D times its temperature.
 
 The look controls (beaming, exposure compensation, color shift, sky rotation)
 are read via drivers from the world's DopplerShift and SkyRotation nodes, and
-speed from F15["beta"], so stars and background always agree.
+speed from F15["rapidity"], so stars and background always agree.
 """
 
 import csv
@@ -33,7 +33,7 @@ import sys
 import bpy
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_sky_shader import MAX_BETA, MOTION, RIG, Builder, new_group  # noqa: E402
+from build_sky_shader import MAX_RAPIDITY, MOTION, RIG, Builder, boost, new_group  # noqa: E402
 
 CATALOG = "//assets/hygdata_v41.csv"
 MAG_LIMIT = 10.0
@@ -89,8 +89,15 @@ def build_catalog_mesh():
 
 
 def build_material():
+    """Additive emission: piled-up stars add their light rather than hiding the sky behind them.
+
+    Ahead of the plane at high gamma, the whole catalog lands in a few pixels;
+    opaque star sprites would cover those pixels with their (individually
+    dim) light and block the bright sky behind.
+    """
     mat = bpy.data.materials.get("StarEmission") or bpy.data.materials.new("StarEmission")
     mat.use_nodes = True
+    mat.surface_render_method = "BLENDED"
     tree = mat.node_tree
     tree.nodes.clear()
     b = Builder(tree)
@@ -98,11 +105,14 @@ def build_material():
     temp = b.node("ShaderNodeAttribute", -600, 100, attribute_type="INSTANCER", attribute_name="star_temperature")
     body = b.node("ShaderNodeBlackbody", -350, 100)
     emit = b.node("ShaderNodeEmission", -100, 0)
-    out = b.node("ShaderNodeOutputMaterial", 150, 0)
+    add = b.node("ShaderNodeAddShader", 100, 0)
+    out = b.node("ShaderNodeOutputMaterial", 300, 0)
     b.link(temp.outputs["Fac"], body.inputs["Temperature"])
     b.link(body.outputs["Color"], emit.inputs["Color"])
     b.link(radiance.outputs["Fac"], emit.inputs["Strength"])
-    b.link(emit.outputs["Emission"], out.inputs["Surface"])
+    b.link(b.node("ShaderNodeBsdfTransparent", -100, -150).outputs["BSDF"], add.inputs[0])
+    b.link(emit.outputs["Emission"], add.inputs[1])
+    b.link(add.outputs["Shader"], out.inputs["Surface"])
     return mat
 
 
@@ -120,7 +130,7 @@ def build_node_group(material):
         return socket
 
     add_input("Camera", "NodeSocketObject")
-    add_input("Beta", "NodeSocketFloat", 0.0, 0.0, MAX_BETA)
+    add_input("Rapidity", "NodeSocketFloat", 0.0, 0.0, MAX_RAPIDITY)
     add_input("Direction", "NodeSocketVector", MOTION)
     add_input("Sky Rotation", "NodeSocketVector")
     add_input("Beaming", "NodeSocketFloat", 3.0, 0.0, 4.0)
@@ -133,7 +143,7 @@ def build_node_group(material):
     b = Builder(group)
     inp = b.node("NodeGroupInput", -2000, 0)
     out = b.node("NodeGroupOutput", 1600, 0)
-    beta = inp.outputs["Beta"]
+    phi = inp.outputs["Rapidity"]
 
     def attr(name, y):
         n = b.node("GeometryNodeInputNamedAttribute", -1800, y, data_type="FLOAT")
@@ -147,20 +157,8 @@ def build_node_group(material):
     b.link(inp.outputs["Sky Rotation"], unrotate.inputs["Rotation"])
     d = b.vmath("NORMALIZE", unrotate.outputs["Vector"], x=-1400, y=400)
     n = b.vmath("NORMALIZE", inp.outputs["Direction"], x=-1400, y=200)
-    cos_star = b.vmath("DOT_PRODUCT", d, n, x=-1200, y=300)
-
-    # cos t' = (cos t + beta) / (1 + beta cos t)
-    beta_cos = b.math("MULTIPLY", beta, cos_star, x=-1000, y=100)
-    cos_obs = b.math("DIVIDE", b.math("ADD", cos_star, beta, x=-1000, y=300), b.math("ADD", 1.0, beta_cos, x=-850, y=100), x=-700, y=250)
-    sin_obs = b.math("SQRT", b.math("MAXIMUM", b.math("SUBTRACT", 1.0, b.math("POWER", cos_obs, 2.0, x=-550, y=450), x=-400, y=450), 0.0, x=-250, y=450), x=-100, y=450)
-    along = b.vmath("SCALE", n, x=-1000, y=600, scale=cos_star)
-    perp = b.vmath("NORMALIZE", b.vmath("SUBTRACT", d, along, x=-800, y=600), x=-600, y=600)
-    seen = b.vmath("ADD", b.vmath("SCALE", n, x=100, y=350, scale=cos_obs), b.vmath("SCALE", perp, x=100, y=550, scale=sin_obs), x=300, y=450)
-
-    # D = gamma (1 + beta cos t), D_max = gamma (1 + beta)
-    gamma = b.math("DIVIDE", 1.0, b.math("SQRT", b.math("SUBTRACT", 1.0, b.math("POWER", beta, 2.0, x=-1200, y=-200), x=-1050, y=-200), x=-900, y=-200), x=-750, y=-200)
-    doppler = b.math("MULTIPLY", gamma, b.math("ADD", 1.0, beta_cos, x=-750, y=-50), x=-450, y=-100)
-    peak = b.math("MULTIPLY", gamma, b.math("ADD", 1.0, beta, x=-750, y=-350), x=-600, y=-300)
+    seen, doppler = boost(b, d, n, phi, to_star_frame=False, x=-1200, y=300)
+    peak = b.math("EXPONENT", phi, x=-600, y=-300)
 
     # flux gain = (D / D_max ** c) ** k / D ** 2, as the world's beaming per solid angle
     beaming = inp.outputs["Beaming"]
@@ -234,6 +232,7 @@ def build_object(mesh, group):
     for c in list(obj.users_collection):
         c.objects.unlink(obj)
     coll.objects.link(obj)
+    obj.parent = None
     obj.visible_shadow = False
 
     obj.modifiers.clear()
@@ -245,7 +244,7 @@ def build_object(mesh, group):
 
     path = lambda name: f'modifiers["StarField"]["{ids[name]}"]'  # noqa: E731
     world = scene.world
-    add_driver(obj, path("Beta"), -1, "OBJECT", bpy.data.objects[RIG], '["beta"]')
+    add_driver(obj, path("Rapidity"), -1, "OBJECT", bpy.data.objects[RIG], '["rapidity"]')
     for name in ("Beaming", "Exposure Compensation", "Color Shift"):
         add_driver(obj, path(name), -1, "WORLD", world, f'node_tree.nodes["DopplerShift"].inputs["{name}"].default_value')
     for i in range(3):

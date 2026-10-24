@@ -1,28 +1,32 @@
-"""Animate the plane's speed in light_speed.blend.
+"""Animate the trip in light_speed.blend: Earth to Jupiter, accelerate, coast, brake.
 
-Run headless from the project root, after build_sky_shader.py (saves the .blend
-in place):
+Run headless from the project root, after build_afterburner.py (saves the
+.blend in place):
 
     blender -b light_speed.blend --python scripts/animate_speed.py
 
-Speed is keyframed as rapidity phi rather than beta: beta = tanh(phi). Rapidity
-adds up linearly under constant thrust (proper acceleration), so a straight
-line in phi is what the pilot feels as steady acceleration: beta creeps toward
-1 but never reaches it. F15["beta"], which the shaders read, is driven by
-F15["rapidity"], so edit the rapidity curve in the Graph Editor to change the
-pacing.
+Thrust is the one animated control; everything else follows from it:
 
-F15["distance_km"] is baked from the rapidity curve: how far the plane has
-flown in the stars' frame, for objects at real scale (Earth, Moon). The
-animation clock is the pilot's proper time tau, so d(distance)/d(tau) =
-c sinh(phi). Re-run this script after editing the rapidity curve.
+* F15["thrust"] (>= 0) sets the afterburners' size and the acceleration.
+  It grows during each burn, so a bigger flame goes with faster acceleration
+  (and gives the eye a speed cue the contracting sky doesn't).
+* F15["burn_direction"] is +1 while accelerating (the afterburners burn) and
+  -1 while braking (the forward-facing retro-rockets burn instead; see
+  build_afterburner.py). The plane keeps its heading throughout.
 
-The shot opens with HOLD_S at rest while the afterburners light
-(F15["thrust"] ramps 0 -> 1), so the Earth below can register before the
-plane leaves it; then constant thrust takes over.
+Rapidity phi (beta = tanh phi) is baked from them: the animation clock is the
+pilot's proper time tau, and under thrust d(phi)/d(tau) = rate * thrust *
+burn_direction. The rate is solved for so that the trip covers TRIP_KM: the
+plane leaves the Earth, collapses the sky ahead to a point at peak gamma
+(several hundred), unwinds it while braking, and comes to rest STANDOFF_KM
+short of Jupiter (placed by build_earth_moon.py from the baked distance).
+F15["distance_km"], the distance flown in the stars' frame, grows as
+c sinh(phi) per unit proper time. F15["beta"] is driven from the rapidity for
+reading only.
 
-Safe to re-run: existing rapidity and thrust curves are kept, so hand edits
-survive. Pass `-- --reset` to replace them with the defaults above.
+Safe to re-run: hand-edited thrust and burn_direction curves are kept
+(re-run after editing them to re-bake). Pass `-- --reset` to replace them with
+the defaults below.
 """
 
 import math
@@ -32,118 +36,167 @@ import sys
 import bpy
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_sky_shader import MAX_BETA, RIG  # noqa: E402
+from build_sky_shader import AIRFRAME, MAX_RAPIDITY, RIG  # noqa: E402
 
 FPS = 30
-HOLD_S = 1.0
-DURATION_S = HOLD_S + 10.0
-# Reach MAX_BETA on the last frame.
-FINAL_RAPIDITY = math.atanh(MAX_BETA)
 C_KM_S = 299792.458
+AU_KM = 1.496e8
+# Jupiter at its closest to Earth, if the planets lined up along the flight path.
+JUPITER_KM = 4.2 * AU_KM
+# Where the plane stops, short of Jupiter's center (radius 69,911 km): close
+# enough for Jupiter to fill a good part of the frame.
+STANDOFF_KM = 450000.0
+TRIP_KM = JUPITER_KM - STANDOFF_KM
+
+# Timeline (seconds).
+HOLD_S = 1.0  # at rest while the afterburners light
+IGNITION_S = 0.6  # thrust ramps up over the end of the hold
+BURN_S = 10.0  # accelerating
+CUT_S = 0.2  # thrust cut at the end of a burn
+COAST_S = 1.0  # engines off, switching from afterburners to retro-rockets
+BRAKE_S = BURN_S
+ARRIVE_S = 2.0  # at rest at Jupiter
+# Thrust at the start and end of each burn (braking mirrors accelerating).
+THRUST_LOW, THRUST_HIGH = 0.6, 1.4
+
+SUBSTEPS = 16
 
 
-def set_frame_range(scene):
-    scene.render.fps = FPS
-    scene.frame_start = 1
-    scene.frame_end = round(FPS * DURATION_S)
+def frame(seconds):
+    return 1 + round(seconds * FPS)
 
 
-def has_curve(obj, data_path):
+def matches(fc, data_path, index):
+    return fc.data_path == data_path and (index is None or fc.array_index == index)
+
+
+def has_curve(obj, data_path, index=None):
     anim = obj.animation_data
-    return bool(anim and anim.action and any(fc.data_path == data_path for fc in anim.action.fcurves))
+    return bool(anim and anim.action and any(matches(fc, data_path, index) for fc in anim.action.fcurves))
 
 
-def remove_curve(obj, data_path):
-    if has_curve(obj, data_path):
+def get_curve(obj, data_path, index=0):
+    return next(fc for fc in obj.animation_data.action.fcurves if matches(fc, data_path, index))
+
+
+def remove_curve(obj, data_path, index=None):
+    while has_curve(obj, data_path, index):
         action = obj.animation_data.action
-        action.fcurves.remove(next(fc for fc in action.fcurves if fc.data_path == data_path))
+        action.fcurves.remove(next(fc for fc in action.fcurves if matches(fc, data_path, index)))
 
 
 def set_keys(obj, prop, keys, interpolation):
-    for frame, value in keys:
+    for f, value in keys:
         obj[prop] = value
-        obj.keyframe_insert(f'["{prop}"]', frame=frame)
-    for fc in obj.animation_data.action.fcurves:
-        if fc.data_path == f'["{prop}"]':
-            for key in fc.keyframe_points:
-                key.interpolation = interpolation
+        obj.keyframe_insert(f'["{prop}"]', frame=f)
+    for key in get_curve(obj, f'["{prop}"]').keyframe_points:
+        key.interpolation = interpolation
 
 
-def key_rapidity(obj, scene, reset):
-    if "rapidity" not in obj:
-        obj["rapidity"] = 0.0
-    obj.id_properties_ui("rapidity").update(
-        min=0.0, soft_max=FINAL_RAPIDITY, precision=3,
-        description="Rapidity phi; beta = tanh(phi). Linear in phi = constant thrust")
+def timeline():
+    burn_end = HOLD_S + BURN_S
+    brake_start = burn_end + COAST_S
+    brake_end = brake_start + BRAKE_S
+    return burn_end, brake_start, brake_end, brake_end + IGNITION_S + ARRIVE_S
+
+
+def key_controls(rig, airframe, scene, reset):
+    burn_end, brake_start, brake_end, end = timeline()
+    scene.render.fps = FPS
+    scene.frame_start = 1
+    scene.frame_end = frame(end)
+
+    for name, desc in (("thrust", "Afterburner size and acceleration (>= 0)"),
+                       ("burn_direction", "+1 accelerating, -1 braking")):
+        if name not in rig:
+            rig[name] = 0.0
+        rig.id_properties_ui(name).update(description=desc)
     if reset:
-        remove_curve(obj, '["rapidity"]')
-    if has_curve(obj, '["rapidity"]'):
-        return
-    ignition = scene.frame_start + round(HOLD_S * FPS)
-    set_keys(obj, "rapidity", ((scene.frame_start, 0.0), (ignition, 0.0), (scene.frame_end, FINAL_RAPIDITY)), "LINEAR")
+        remove_curve(rig, '["thrust"]')
+        remove_curve(rig, '["burn_direction"]')
+    # The plane no longer flips to brake (an earlier version did).
+    remove_curve(airframe, "rotation_euler", 2)
+    airframe.rotation_euler = (0.0, 0.0, 0.0)
+
+    if not has_curve(rig, '["thrust"]'):
+        # Linear keys, braking the mirror image of accelerating, so the
+        # braking burn takes off exactly the rapidity the first one built up.
+        set_keys(rig, "thrust", (
+            (frame(0), 0.0), (frame(HOLD_S - IGNITION_S), 0.0), (frame(HOLD_S), THRUST_LOW),
+            (frame(burn_end), THRUST_HIGH), (frame(burn_end + CUT_S), 0.0),
+            (frame(brake_start - CUT_S), 0.0), (frame(brake_start), THRUST_HIGH),
+            (frame(brake_end), THRUST_LOW), (frame(brake_end + IGNITION_S), 0.0),
+        ), "LINEAR")
+    if not has_curve(rig, '["burn_direction"]'):
+        set_keys(rig, "burn_direction", ((frame(0), 1.0), (frame(burn_end + COAST_S / 2), -1.0)), "CONSTANT")
 
 
-def key_thrust(obj, scene, reset):
-    """Afterburners light during the hold, at full thrust when acceleration starts."""
-    if reset:
-        remove_curve(obj, '["thrust"]')
-    if "thrust" not in obj or has_curve(obj, '["thrust"]'):
-        return
-    ignition = scene.frame_start + round(HOLD_S * FPS)
-    set_keys(obj, "thrust", ((scene.frame_start, 0.0), (ignition - round(0.6 * FPS), 0.0), (ignition, 1.0)), "BEZIER")
+def integrate(rig, scene, rate):
+    """Per-frame rapidity and distance (km) for a given rapidity rate (1/s per unit thrust)."""
+    thrust = get_curve(rig, '["thrust"]')
+    direction = get_curve(rig, '["burn_direction"]')
+    step = 1.0 / (FPS * SUBSTEPS)
+    phi, distance = [0.0], [0.0]
+    for f in range(scene.frame_start + 1, scene.frame_end + 1):
+        p, d = phi[-1], distance[-1]
+        for i in range(SUBSTEPS):
+            t = f - 1 + (i + 0.5) / SUBSTEPS
+            change = rate * thrust.evaluate(t) * direction.evaluate(t) * step
+            # Midpoint rule: distance at the rapidity half a step in.
+            d += C_KM_S * math.sinh(max(p + 0.5 * change, 0.0)) * step
+            p = max(p + change, 0.0)
+        phi.append(p)
+        distance.append(d)
+    return phi, distance
 
 
-def drive_beta(obj):
-    if has_curve(obj, '["beta"]'):
-        obj.keyframe_delete('["beta"]')
-    obj.driver_remove('["beta"]')
-    driver = obj.driver_add('["beta"]').driver
+def solve_rate(rig, scene):
+    """Rapidity rate for which the whole trip covers TRIP_KM (distance grows with rate)."""
+    lo, hi = 0.01, 3.0
+    for _ in range(50):
+        mid = 0.5 * (lo + hi)
+        if integrate(rig, scene, mid)[1][-1] > TRIP_KM:
+            hi = mid
+        else:
+            lo = mid
+    return 0.5 * (lo + hi)
+
+
+def bake(rig, scene, rate):
+    phi, distance = integrate(rig, scene, rate)
+    for prop, values, desc in (
+            ("rapidity", phi, "Rapidity phi, baked from thrust: beta = tanh(phi), gamma = cosh(phi)"),
+            ("distance_km", distance, "Distance flown in the stars' frame (km), baked from rapidity")):
+        remove_curve(rig, f'["{prop}"]')
+        rig[prop] = 0.0
+        rig.id_properties_ui(prop).update(min=0.0, description=desc)
+        set_keys(rig, prop, list(zip(range(scene.frame_start, scene.frame_end + 1), values)), "LINEAR")
+    peak = max(phi)
+    assert peak < MAX_RAPIDITY, peak
+    print(f"Rapidity rate {rate:.4f}/s per unit thrust; peak gamma {math.cosh(peak):.0f} "
+          f"(beta = 1 - {1 - math.tanh(peak):.1e}); final rapidity {phi[-1]:.2e}; "
+          f"distance {distance[-1]:,.0f} km ({distance[-1] / AU_KM:.2f} AU) in {(scene.frame_end - 1) / FPS:.1f} s")
+
+
+def drive_beta(rig):
+    remove_curve(rig, '["beta"]')
+    rig.driver_remove('["beta"]')
+    driver = rig.driver_add('["beta"]').driver
     driver.type = "SCRIPTED"
     var = driver.variables.new()
     var.name = "phi"
-    var.targets[0].id = obj
+    var.targets[0].id = rig
     var.targets[0].data_path = '["rapidity"]'
     # tanh(phi), written with exp so it runs without Python auto-run.
-    driver.expression = f"min(1 - 2 / (exp(2 * phi) + 1), {MAX_BETA})"
+    driver.expression = "1 - 2 / (exp(2 * phi) + 1)"
     assert driver.is_simple_expression
-
-
-def rapidity_curve(obj):
-    return next(fc for fc in obj.animation_data.action.fcurves if fc.data_path == '["rapidity"]')
-
-
-def bake_distance(obj, scene, substeps=16):
-    """Keyframe the distance flown (km) on every frame, integrating c sinh(phi)."""
-    if has_curve(obj, '["distance_km"]'):
-        obj.animation_data.action.fcurves.remove(
-            next(fc for fc in obj.animation_data.action.fcurves if fc.data_path == '["distance_km"]'))
-    obj["distance_km"] = 0.0
-    obj.id_properties_ui("distance_km").update(
-        min=0.0, description="Distance flown in the stars' frame (km), baked from rapidity")
-    phi = rapidity_curve(obj)
-    fps = scene.render.fps
-    distance = 0.0
-    for frame in range(scene.frame_start, scene.frame_end + 1):
-        if frame > scene.frame_start:
-            # Midpoint rule over the previous frame.
-            for i in range(substeps):
-                f = frame - 1 + (i + 0.5) / substeps
-                distance += C_KM_S * math.sinh(phi.evaluate(f)) / (fps * substeps)
-        obj["distance_km"] = distance
-        obj.keyframe_insert('["distance_km"]', frame=frame)
-    for fc in obj.animation_data.action.fcurves:
-        if fc.data_path == '["distance_km"]':
-            for key in fc.keyframe_points:
-                key.interpolation = "LINEAR"
 
 
 if __name__ == "__main__":
     reset = "--reset" in sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else False
     scene = bpy.context.scene
     rig = bpy.data.objects[RIG]
-    set_frame_range(scene)
-    key_rapidity(rig, scene, reset)
-    key_thrust(rig, scene, reset)
+    key_controls(rig, bpy.data.objects[AIRFRAME], scene, reset)
+    bake(rig, scene, solve_rate(rig, scene))
     drive_beta(rig)
-    bake_distance(rig, scene)
     bpy.ops.wm.save_mainfile()

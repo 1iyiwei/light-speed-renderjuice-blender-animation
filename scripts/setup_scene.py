@@ -16,6 +16,10 @@ STARMAP = "//assets/starmap_2020_8k.exr"
 
 # Names of the plane's root empty, camera, and light.
 RIG = "F15"
+# Child of the rig holding the plane's meshes and flames, so the plane can be
+# turned or banked while the rig, and the camera on it, keep facing the
+# direction of travel.
+AIRFRAME = "Airframe"
 CAMERA = "ChaseCam"
 SUN = "Sun"
 
@@ -51,20 +55,27 @@ def move_to_collection(obj, coll):
         coll.objects.link(obj)
 
 
+def get_empty(name, coll, size):
+    obj = bpy.data.objects.get(name)
+    if obj is None:
+        obj = bpy.data.objects.new(name, None)
+        obj.empty_display_type = "ARROWS"
+        obj.empty_display_size = size
+    move_to_collection(obj, coll)
+    return obj
+
+
 def setup_plane():
-    """Group the F-15 meshes under one empty so the plane moves as a unit."""
+    """Group the F-15 meshes under F15 > Airframe so the plane moves as a unit."""
     coll = get_collection("F15")
-    rig = bpy.data.objects.get(RIG)
-    if rig is None:
-        rig = bpy.data.objects.new(RIG, None)
-        rig.empty_display_type = "ARROWS"
-        rig.empty_display_size = 5
-    move_to_collection(rig, coll)
-    for obj in [o for o in bpy.context.scene.objects if o.type == "MESH"]:
+    rig = get_empty(RIG, coll, 5)
+    airframe = get_empty(AIRFRAME, coll, 3)
+    airframe.parent = rig
+    for obj in [o for o in bpy.context.scene.objects if o.type == "MESH" and o.users_collection[0].name in ("F15", "Collection")]:
         move_to_collection(obj, coll)
-        if obj.parent is None:
+        if obj.parent in (None, rig):
             world = obj.matrix_world.copy()
-            obj.parent = rig
+            obj.parent = airframe
             obj.matrix_world = world
     return rig
 

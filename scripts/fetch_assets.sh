@@ -17,6 +17,7 @@ FILES=(
   "hygdata_v41.csv 33932548 https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hygdata_v41.csv"
   "world.200412.3x5400x2700.jpg 1878742 https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74218/world.200412.3x5400x2700.jpg"
   "lroc_color_poles_4k.tif 13095388 https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_4k.tif"
+  "PIA07782.jpg 441285 https://assets.science.nasa.gov/content/dam/science/psd/photojournal/pia/pia07/pia07782/PIA07782.jpg"
 )
 
 for entry in "${FILES[@]}"; do

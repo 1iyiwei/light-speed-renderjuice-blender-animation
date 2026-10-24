@@ -6,31 +6,40 @@ Run headless from the project root (saves the .blend in place):
 
 The camera rides along with the plane, so everything relativistic happens
 in the world shader: we see the star map as it appears to an observer moving
-at speed beta (fraction of c) along a direction.
+along a direction with rapidity phi (speed beta = tanh phi, gamma = cosh phi).
+Working in rapidity rather than beta keeps the math exact near light speed,
+where 1 - beta is below single-precision resolution.
 
-* Aberration: a ray leaving the camera at angle t' to the motion direction
-  came from the star-frame angle t, where
-      cos t = (cos t' - beta) / (1 - beta cos t'),
-  which crowds the sky toward the direction of travel.
-* Doppler factor: D = 1 / (gamma (1 - beta cos t')), > 1 ahead (blue), < 1
-  behind and to the side (red); looking sideways it is 1 / gamma.
+* Aberration: a direction at angle t to the motion in the stars' frame is seen
+  from the plane at angle t', where
+      tan(t' / 2) = exp(-phi) tan(t / 2),
+  which crowds the sky toward the direction of travel. (Equivalent to the
+  textbook cos t' = (cos t + beta) / (1 + beta cos t).)
+* Doppler factor: D = gamma (1 + beta cos t)
+                    = exp(phi) cos^2(t / 2) + exp(-phi) sin^2(t / 2),
+  > 1 ahead (blue), < 1 behind and to the side (red); looking sideways from
+  the plane it is 1 / gamma.
 * Color shift: a blackbody at temperature T is seen as one at D T, so the
   pixel color is tinted by Blackbody(D T_ref) / Blackbody(T_ref).
 * Beaming: intensity scales by D ** k (k = 3 for specific intensity, 4 for
   total power).
 * Exposure compensation (artistic, not physics): divide by the peak Doppler
-  factor D_max ** (k c), where D_max = gamma (1 + beta) is straight ahead and
+  factor D_max ** (k c), where D_max = exp(phi) is straight ahead and
   c in [0, 1]. With c = 1 the forward point keeps its rest brightness and the
   rest of the sky dims, like a camera auto-exposing for the bright spot.
 
-Speed is the custom property "beta" on the F15 empty; the shader reads it via
-a driver, so keyframe F15["beta"] to animate. Safe to re-run: the node groups
-and world nodes are rebuilt from scratch.
+Speed is the custom property "rapidity" on the F15 empty (animated by
+animate_speed.py); the shader reads it via a driver. Safe to re-run: the node
+groups and world nodes are rebuilt from scratch, keeping hand-tuned values of
+the look controls (pass `-- --reset` to go back to the defaults).
 """
+
+import sys
 
 import bpy
 
 RIG = "F15"
+AIRFRAME = "Airframe"  # child of RIG holding the plane, made by setup_scene.py
 # The Milky Way without its bright stars; those are drawn as points by
 # build_star_points.py.
 STARMAP = "//assets/milkyway_2020_8k.exr"
@@ -40,6 +49,8 @@ MILKY_WAY_STRENGTH = 0.6
 # The plane faces -Y and flies along it.
 MOTION = (0.0, -1.0, 0.0)
 MAX_BETA = 0.9999
+# Upper bound for the rapidity property and sockets (gamma ~ 11,000).
+MAX_RAPIDITY = 10.0
 
 
 class Builder:
@@ -84,10 +95,49 @@ class Builder:
 
 
 def new_group(name, tree_type="ShaderNodeTree"):
-    old = bpy.data.node_groups.get(name)
-    if old:
-        bpy.data.node_groups.remove(old)
-    return bpy.data.node_groups.new(name, tree_type)
+    """An empty node group, rebuilt in place if it exists so materials using it keep their link."""
+    group = bpy.data.node_groups.get(name)
+    if group is None or group.bl_idname != tree_type:
+        return bpy.data.node_groups.new(name, tree_type)
+    group.nodes.clear()
+    group.interface.clear()
+    return group
+
+
+def boost(b, d, n, phi, to_star_frame, x=0, y=0):
+    """Aberrate unit direction d about the unit motion direction n, by rapidity phi.
+
+    Forward (to_star_frame False): d is a direction in the stars' frame, the
+    result is where it is seen from the plane. Inverse: d is a view direction
+    from the plane, the result is the star-frame direction it looks at.
+    Returns (direction, Doppler factor D).
+
+    The half-angle form tan(t'/2) = exp(-phi) tan(t/2), with tan of the half
+    angle as |d - n| / |d + n|, never subtracts nearly equal numbers, so it
+    stays accurate for gamma in the thousands.
+    """
+    away = b.vmath("LENGTH", b.vmath("SUBTRACT", d, n, x=x, y=y + 200), x=x + 150, y=y + 200)
+    toward = b.vmath("LENGTH", b.vmath("ADD", d, n, x=x, y=y + 50), x=x + 150, y=y + 50)
+    half = b.math("ARCTAN2", away, toward, x=x + 300, y=y + 250)
+    factor = b.math("EXPONENT", phi if to_star_frame else b.math("MULTIPLY", phi, -1.0, x=x, y=y - 100), x=x + 150, y=y - 100)
+    new_half = b.math("ARCTAN2", b.math("MULTIPLY", away, factor, x=x + 300, y=y + 100), toward, x=x + 450, y=y + 150)
+
+    # Keep the azimuth around the motion axis: rebuild from the new angle.
+    perp = b.vmath("NORMALIZE", b.vmath("SUBTRACT", d, b.vmath("SCALE", n, x=x, y=y + 400, scale=b.vmath("DOT_PRODUCT", d, n, x=x - 150, y=y + 400)), x=x + 150, y=y + 400), x=x + 300, y=y + 400)
+    angle = b.math("MULTIPLY", new_half, 2.0, x=x + 600, y=y + 150)
+    direction = b.vmath("ADD",
+                        b.vmath("SCALE", n, x=x + 750, y=y + 300, scale=b.math("COSINE", angle, x=x + 750, y=y + 150)),
+                        b.vmath("SCALE", perp, x=x + 750, y=y + 450, scale=b.math("SINE", angle, x=x + 750, y=y + 50)),
+                        x=x + 900, y=y + 350)
+
+    # D = exp(phi) cos^2(t/2) + exp(-phi) sin^2(t/2), t the star-frame angle.
+    star_half = new_half if to_star_frame else half
+    grow = b.math("EXPONENT", phi, x=x + 450, y=y - 250)
+    shrink = b.math("EXPONENT", b.math("MULTIPLY", phi, -1.0, x=x + 300, y=y - 400), x=x + 450, y=y - 400)
+    cos2 = b.math("POWER", b.math("COSINE", star_half, x=x + 600, y=y - 50), 2.0, x=x + 750, y=y - 50)
+    sin2 = b.math("POWER", b.math("SINE", star_half, x=x + 600, y=y - 200), 2.0, x=x + 750, y=y - 200)
+    doppler = b.math("ADD", b.math("MULTIPLY", grow, cos2, x=x + 900, y=y - 100), b.math("MULTIPLY", shrink, sin2, x=x + 900, y=y - 300), x=x + 1050, y=y - 200)
+    return direction, doppler
 
 
 def build_aberration():
@@ -95,8 +145,8 @@ def build_aberration():
     group = new_group("RelativisticAberration")
     face = group.interface
     face.new_socket("View", in_out="INPUT", socket_type="NodeSocketVector")
-    beta = face.new_socket("Beta", in_out="INPUT", socket_type="NodeSocketFloat")
-    beta.min_value, beta.max_value = 0.0, MAX_BETA
+    phi = face.new_socket("Rapidity", in_out="INPUT", socket_type="NodeSocketFloat")
+    phi.min_value, phi.max_value = 0.0, MAX_RAPIDITY
     motion = face.new_socket("Direction", in_out="INPUT", socket_type="NodeSocketVector")
     motion.default_value = MOTION
     face.new_socket("Vector", in_out="OUTPUT", socket_type="NodeSocketVector")
@@ -105,38 +155,14 @@ def build_aberration():
 
     b = Builder(group)
     inp = b.node("NodeGroupInput", -1200, 0)
-    out = b.node("NodeGroupOutput", 1000, 0)
-    beta = inp.outputs["Beta"]
-
+    out = b.node("NodeGroupOutput", 600, 0)
+    phi = inp.outputs["Rapidity"]
     v = b.vmath("NORMALIZE", inp.outputs["View"], x=-1000, y=200)
     n = b.vmath("NORMALIZE", inp.outputs["Direction"], x=-1000, y=-100)
-    cos_obs = b.vmath("DOT_PRODUCT", v, n, x=-800, y=100)
-
-    # cos t = (cos t' - beta) / (1 - beta cos t')
-    num = b.math("SUBTRACT", cos_obs, beta, x=-600, y=300)
-    den = b.math("SUBTRACT", 1.0, b.math("MULTIPLY", beta, cos_obs, x=-600, y=150), x=-450, y=150)
-    cos_star = b.math("DIVIDE", num, den, x=-300, y=250)
-    sin_star = b.math("SQRT", b.math("MAXIMUM", b.math("SUBTRACT", 1.0, b.math("POWER", cos_star, 2.0, x=-150, y=400), x=0, y=400), 0.0, x=150, y=400), x=300, y=400)
-
-    # Keep the azimuth around the motion axis: split v into along-axis and
-    # perpendicular parts, then rebuild with the star-frame angle.
-    along = b.vmath("SCALE", n, x=-600, y=-150, scale=cos_obs)
-    perp = b.vmath("NORMALIZE", b.vmath("SUBTRACT", v, along, x=-400, y=-150), x=-200, y=-150)
-    star_dir = b.vmath(
-        "ADD",
-        b.vmath("SCALE", n, x=500, y=200, scale=cos_star),
-        b.vmath("SCALE", perp, x=500, y=0, scale=sin_star),
-        x=700,
-        y=100,
-    )
+    star_dir, doppler = boost(b, v, n, phi, to_star_frame=True, x=-800, y=0)
     b.link(star_dir, out.inputs["Vector"])
-
-    # D = 1 / (gamma (1 - beta cos t')), gamma = 1 / sqrt(1 - beta^2)
-    gamma = b.math("DIVIDE", 1.0, b.math("SQRT", b.math("SUBTRACT", 1.0, b.math("POWER", beta, 2.0, x=-800, y=-450), x=-600, y=-450), x=-400, y=-450), x=-200, y=-450)
-    drop = b.math("SUBTRACT", 1.0, b.math("MULTIPLY", beta, cos_obs, x=-400, y=-600), x=-200, y=-600)
-    b.link(b.math("DIVIDE", 1.0, b.math("MULTIPLY", gamma, drop, x=0, y=-600), x=150, y=-500), out.inputs["Doppler"])
-    peak = b.math("MULTIPLY", gamma, b.math("ADD", 1.0, beta, x=-200, y=-750), x=0, y=-700)
-    b.link(peak, out.inputs["Peak Doppler"])
+    b.link(doppler, out.inputs["Doppler"])
+    b.link(b.math("EXPONENT", phi, x=300, y=-500), out.inputs["Peak Doppler"])
     return group
 
 
@@ -185,44 +211,55 @@ def build_doppler_shift():
     return group
 
 
-def ensure_beta_property():
+def ensure_speed_properties():
+    """F15["rapidity"] drives the shaders; F15["beta"] (driven from it by animate_speed.py) is for reading."""
     rig = bpy.data.objects[RIG]
-    if "beta" not in rig:
-        rig["beta"] = 0.0
-    ui = rig.id_properties_ui("beta")
-    ui.update(min=0.0, max=MAX_BETA, soft_min=0.0, soft_max=MAX_BETA, precision=4,
-              description="Speed as a fraction of the speed of light")
+    for name in ("rapidity", "beta"):
+        if name not in rig:
+            rig[name] = 0.0
+    rig.id_properties_ui("rapidity").update(min=0.0, max=MAX_RAPIDITY, precision=3,
+                                            description="Rapidity phi: beta = tanh(phi), gamma = cosh(phi)")
+    rig.id_properties_ui("beta").update(min=0.0, max=1.0, precision=6,
+                                        description="Speed as a fraction of the speed of light")
     return rig
 
 
-def saved_inputs(tree, names):
-    """Unlinked input values of the named nodes, to survive a rebuild."""
+# World nodes whose hand-tuned input values (the look controls) survive a rebuild.
+TUNABLE_NODES = ("SkyRotation", "DopplerShift")
+
+
+def saved_inputs(world):
+    """Unlinked input values of the tunable world nodes, by node and input name.
+
+    Read these before rebuilding the node groups: rebuilding a group's
+    interface resets the inputs of nodes that use it.
+    """
     values = {}
-    for name in names:
-        node = tree.nodes.get(name)
+    if world is None or world.node_tree is None:
+        return values
+    for name in TUNABLE_NODES:
+        node = world.node_tree.nodes.get(name)
         if node is None:
             continue
         for socket in node.inputs:
             if not socket.is_linked and hasattr(socket, "default_value"):
                 value = socket.default_value
-                values[name, socket.identifier] = tuple(value) if hasattr(value, "__len__") else value
+                values[name, socket.name] = tuple(value) if hasattr(value, "__len__") else value
     return values
 
 
 def restore_inputs(tree, values):
-    for (name, identifier), value in values.items():
+    for (name, socket_name), value in values.items():
         node = tree.nodes.get(name)
-        socket = node and next((s for s in node.inputs if s.identifier == identifier), None)
-        if socket is not None:
-            socket.default_value = value
+        if node is not None and socket_name in node.inputs:
+            node.inputs[socket_name].default_value = value
 
 
-def build_world(aberration, doppler_shift, rig):
+def build_world(aberration, doppler_shift, rig, tweaks):
     world = bpy.context.scene.world
     world.use_nodes = True
     tree = world.node_tree
     image = bpy.data.images.load(STARMAP, check_existing=True)
-    tweaks = saved_inputs(tree, ("SkyRotation", "DopplerShift"))
     tree.nodes.clear()
 
     b = Builder(tree)
@@ -249,20 +286,44 @@ def build_world(aberration, doppler_shift, rig):
     b.link(shift.outputs["Color"], bg.inputs["Color"])
     b.link(bg.outputs["Background"], output.inputs["Surface"])
 
-    beta = ab.inputs["Beta"]
-    beta.driver_remove("default_value")
-    fcurve = beta.driver_add("default_value")
+    speed = ab.inputs["Rapidity"]
+    speed.driver_remove("default_value")
+    fcurve = speed.driver_add("default_value")
     driver = fcurve.driver
     driver.type = "AVERAGE"
     var = driver.variables.new()
-    var.name = "beta"
+    var.name = "phi"
     var.type = "SINGLE_PROP"
     var.targets[0].id_type = "OBJECT"
     var.targets[0].id = rig
-    var.targets[0].data_path = '["beta"]'
+    var.targets[0].data_path = '["rapidity"]'
+
+
+def reset_group_users(group):
+    """Set inputs of group nodes using `group` outside the world back to its defaults.
+
+    Rebuilding a group's interface in place zeroes the inputs of every node
+    using it; the bodies' materials drive the look controls from the world, but
+    their other inputs need their defaults back.
+    """
+    defaults = {item.name: item.default_value for item in group.interface.items_tree
+                if item.item_type == "SOCKET" and item.in_out == "INPUT" and hasattr(item, "default_value")}
+    for mat in bpy.data.materials:
+        if not mat.use_nodes:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.bl_idname == "ShaderNodeGroup" and node.node_tree == group:
+                for socket in node.inputs:
+                    if not socket.is_linked and socket.name in defaults:
+                        socket.default_value = defaults[socket.name]
 
 
 if __name__ == "__main__":
-    rig = ensure_beta_property()
-    build_world(build_aberration(), build_doppler_shift(), rig)
+    # `-- --reset` drops hand-tuned look controls and uses the defaults above.
+    reset = "--reset" in sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else False
+    tweaks = {} if reset else saved_inputs(bpy.context.scene.world)
+    rig = ensure_speed_properties()
+    doppler_shift = build_doppler_shift()
+    build_world(build_aberration(), doppler_shift, rig, tweaks)
+    reset_group_users(doppler_shift)
     bpy.ops.wm.save_mainfile()

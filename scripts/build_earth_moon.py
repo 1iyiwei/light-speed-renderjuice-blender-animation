@@ -1,4 +1,4 @@
-"""Build the real-scale Earth and Moon in light_speed.blend.
+"""Build the real-scale Earth, Moon and Jupiter in light_speed.blend.
 
 Run headless from the project root, after animate_speed.py (saves the .blend
 in place):
@@ -8,7 +8,9 @@ in place):
 Stars are too far away to stream past, so on their own the shot has no sense
 of forward motion. Nearby objects do stream backward past the plane, and at
 real scale the numbers work out in real time: the plane skims over the Earth
-in the first half second and passes the Moon at about 2.2 s (beta ~ 0.79).
+as it starts accelerating and passes the Moon a couple of seconds later. The
+trip (animate_speed.py) ends at rest in front of Jupiter, placed here from the
+baked distance.
 
 Positions are in km in the stars' frame (where Earth and Moon are at rest),
 with the plane starting at the origin and flying along MOTION; F15["distance_km"]
@@ -37,7 +39,8 @@ import bpy
 import mathutils
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_sky_shader import MAX_BETA, MOTION, RIG, Builder, new_group  # noqa: E402
+from animate_speed import STANDOFF_KM  # noqa: E402
+from build_sky_shader import MAX_RAPIDITY, MOTION, RIG, Builder, boost, new_group  # noqa: E402
 
 # Centers in km, stars' frame, relative to the plane's start. The plane starts
 # about 1,300 km above the Earth, which lies ahead and below with its limb just
@@ -59,6 +62,19 @@ BODIES = {
              "texture": "//assets/lroc_color_poles_4k.tif",
              "orient": ((0.0, 0.0, 0.0), tuple(e - m for e, m in zip(EARTH_CENTER, MOON_CENTER)), (0.0, 0.0, 1.0))},
 }
+JUPITER_RADIUS = 69911.0
+JUPITER_FLATTENING = 0.0649  # polar radius 66,854 km
+
+
+def jupiter(rig):
+    """Jupiter STANDOFF_KM straight ahead of where the trip ends, Great Red Spot toward the plane."""
+    distance = next(fc for fc in rig.animation_data.action.fcurves if fc.data_path == '["distance_km"]')
+    arrival = distance.evaluate(bpy.context.scene.frame_end)
+    n = mathutils.Vector(MOTION).normalized()
+    return {"center": tuple((arrival + STANDOFF_KM) * n), "radius": JUPITER_RADIUS, "segments": 256,
+            "flattening": JUPITER_FLATTENING, "texture": "//assets/PIA07782.jpg",
+            # Cassini map (PIA07782): the Great Red Spot is near lat -20, u = 0.36.
+            "orient": ((-12.0, -50.0, 0.0), tuple(-n), (0.0, 0.0, 1.0))}
 # Shell (meters from the camera) the bodies are drawn on: in front of the
 # stars (900 m), behind the plane, inside the camera's clip_end.
 NEAR, FAR = 300.0, 850.0
@@ -86,12 +102,13 @@ def orientation(geo, up, forward):
     return target @ geo_frame.transposed()
 
 
-def sphere_mesh(name, radius, segments, orient):
+def sphere_mesh(name, radius, segments, orient, flattening=0.0):
     """UV sphere in km, centered on the origin, with a UV map for equirect textures."""
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
     bm.loops.layers.uv.new("UVMap")
     bmesh.ops.create_uvsphere(bm, u_segments=segments, v_segments=segments // 2, radius=radius, calc_uvs=True)
+    bmesh.ops.scale(bm, verts=bm.verts, vec=(1.0, 1.0, 1.0 - flattening))
     bmesh.ops.rotate(bm, verts=bm.verts, matrix=orientation(*orient))
     bm.to_mesh(mesh)
     bm.free()
@@ -111,8 +128,8 @@ def build_node_group():
     face.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
     face.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
     face.new_socket("Camera", in_out="INPUT", socket_type="NodeSocketObject")
-    beta = face.new_socket("Beta", in_out="INPUT", socket_type="NodeSocketFloat")
-    beta.min_value, beta.max_value = 0.0, MAX_BETA
+    phi = face.new_socket("Rapidity", in_out="INPUT", socket_type="NodeSocketFloat")
+    phi.min_value, phi.max_value = 0.0, MAX_RAPIDITY
     face.new_socket("Distance", in_out="INPUT", socket_type="NodeSocketFloat")
     face.new_socket("Direction", in_out="INPUT", socket_type="NodeSocketVector").default_value = MOTION
     face.new_socket("Center", in_out="INPUT", socket_type="NodeSocketVector")
@@ -120,7 +137,7 @@ def build_node_group():
     b = Builder(group)
     inp = b.node("NodeGroupInput", -2000, 0)
     out = b.node("NodeGroupOutput", 1800, 0)
-    beta = inp.outputs["Beta"]
+    phi = inp.outputs["Rapidity"]
 
     # Where the vertex is relative to the plane, in the stars' frame (km).
     n = b.vmath("NORMALIZE", inp.outputs["Direction"], x=-1800, y=-200)
@@ -129,19 +146,8 @@ def build_node_group():
     rel = b.vmath("SUBTRACT", world, plane, x=-1400, y=100)
     dist = b.vmath("LENGTH", rel, x=-1200, y=-100)
     d = b.vmath("NORMALIZE", rel, x=-1200, y=200)
-    cos_star = b.vmath("DOT_PRODUCT", d, n, x=-1000, y=100)
-
-    # Aberration, as for the stars: cos t' = (cos t + beta) / (1 + beta cos t)
-    beta_cos = b.math("MULTIPLY", beta, cos_star, x=-800, y=-100)
-    cos_obs = b.math("DIVIDE", b.math("ADD", cos_star, beta, x=-800, y=100), b.math("ADD", 1.0, beta_cos, x=-650, y=-100), x=-500, y=50)
-    sin_obs = b.math("SQRT", b.math("MAXIMUM", b.math("SUBTRACT", 1.0, b.math("POWER", cos_obs, 2.0, x=-350, y=250), x=-200, y=250), 0.0, x=-50, y=250), x=100, y=250)
-    along = b.vmath("SCALE", n, x=-800, y=450, scale=cos_star)
-    perp = b.vmath("NORMALIZE", b.vmath("SUBTRACT", d, along, x=-600, y=450), x=-400, y=450)
-    seen = b.vmath("ADD", b.vmath("SCALE", n, x=300, y=150, scale=cos_obs), b.vmath("SCALE", perp, x=300, y=350, scale=sin_obs), x=500, y=250)
-
-    # D = gamma (1 + beta cos t)
-    gamma = b.math("DIVIDE", 1.0, b.math("SQRT", b.math("SUBTRACT", 1.0, b.math("POWER", beta, 2.0, x=-800, y=-400), x=-650, y=-400), x=-500, y=-400), x=-350, y=-400)
-    doppler = b.math("MULTIPLY", gamma, b.math("ADD", 1.0, beta_cos, x=-350, y=-250), x=-200, y=-300)
+    # Aberration and Doppler factor, as for the stars.
+    seen, doppler = boost(b, d, n, phi, to_star_frame=False, x=-1000, y=100)
 
     # Shell radius from log10(true distance), clamped to [NEAR, FAR].
     remap = b.node("ShaderNodeMapRange", 100, -150, clamp=True)
@@ -190,7 +196,7 @@ def add_doppler_shift(b, rig, color, x, y):
     b.link(color, shift.inputs["Color"])
     b.link(b.node("ShaderNodeAttribute", x - 300, y - 300, attribute_type="GEOMETRY", attribute_name="doppler").outputs["Fac"], shift.inputs["Doppler"])
     peak = b.node("ShaderNodeValue", x - 300, y - 500, name="Peak Doppler", label="Peak Doppler")
-    add_driver(peak.outputs[0], "default_value", "(1 + b) / sqrt(1 - b * b)", [("b", "OBJECT", rig, '["beta"]')])
+    add_driver(peak.outputs[0], "default_value", "exp(phi)", [("phi", "OBJECT", rig, '["rapidity"]')])
     b.link(peak.outputs[0], shift.inputs["Peak Doppler"])
     for socket in ("Beaming", "Exposure Compensation", "Color Shift"):
         add_driver(shift.inputs[socket], "default_value", "v",
@@ -254,7 +260,7 @@ def build_atmosphere_material(rig):
 
 
 def build_body(name, spec, group, rig):
-    mesh = sphere_mesh(name, spec["radius"], spec["segments"], spec["orient"])
+    mesh = sphere_mesh(name, spec["radius"], spec["segments"], spec["orient"], spec.get("flattening", 0.0))
     mesh.materials.clear()
     mesh.materials.append(build_material(f"{name}Surface", spec["texture"], rig))
     place_object(name, mesh, spec, group, rig)
@@ -274,6 +280,7 @@ def place_object(name, mesh, spec, group, rig):
     for c in list(obj.users_collection):
         c.objects.unlink(obj)
     coll.objects.link(obj)
+    obj.parent = None
     obj.visible_shadow = False
 
     obj.modifiers.clear()
@@ -282,13 +289,13 @@ def place_object(name, mesh, spec, group, rig):
     ids = {s.name: s.identifier for s in group.interface.items_tree if s.in_out == "INPUT"}
     mod[ids["Camera"]] = scene.camera
     mod[ids["Center"]] = spec["center"]
-    for socket, prop in (("Beta", "beta"), ("Distance", "distance_km")):
+    for socket, prop in (("Rapidity", "rapidity"), ("Distance", "distance_km")):
         add_driver(obj, f'modifiers["RelativisticBody"]["{ids[socket]}"]', "v", [("v", "OBJECT", rig, f'["{prop}"]')])
 
 
 if __name__ == "__main__":
     rig = bpy.data.objects[RIG]
     group = build_node_group()
-    for name, spec in BODIES.items():
+    for name, spec in {**BODIES, "Jupiter": jupiter(rig)}.items():
         build_body(name, spec, group, rig)
     bpy.ops.wm.save_mainfile()

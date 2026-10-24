@@ -156,6 +156,7 @@ def build(rig):
     for c in list(obj.users_collection):
         c.objects.unlink(obj)
     coll.objects.link(obj)
+    obj.parent = None
     obj.visible_shadow = False
 
     obj.modifiers.clear()
@@ -165,7 +166,7 @@ def build(rig):
     ids = {s.name: s.identifier for s in body.interface.items_tree if s.in_out == "INPUT"}
     mod[ids["Camera"]] = scene.camera
     mod[ids["Center"]] = (0.0, 0.0, 0.0)
-    for socket, prop in (("Beta", "beta"), ("Distance", "distance_km")):
+    for socket, prop in (("Rapidity", "rapidity"), ("Distance", "distance_km")):
         add_driver(obj, f'modifiers["RelativisticBody"]["{ids[socket]}"]', "v", [("v", "OBJECT", rig, f'["{prop}"]')])
 
 
