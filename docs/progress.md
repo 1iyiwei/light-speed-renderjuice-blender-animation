@@ -12,6 +12,17 @@ Commit `9b019a7` (tag `wip-1`).
 * Replaced the Kitbash cargo plane with a CC0 F-15A Eagle.
 * Chase camera riding along with the plane; NASA SVS star map as the background.
 
+## wip-1b: texture-only relativistic sky (2026-10-24)
+
+Commit `9b019a7` (tag `wip-1`; same commit, rendered with the sky shader it already contains).
+
+![Texture-only sky: chase camera at beta = 0, 0.5, 0.9, 0.99, 0.999, and a camera aimed along the flight path at 0.999](progress/wip1b_texture_sky_beta_sweep.jpg)
+
+* First world shader: aberration, Doppler color shift and beaming applied to the NASA star map as a texture.
+* Two problems, both fixed in wip-2:
+  * The Doppler factor used the wrong one of its two equivalent-looking forms (correct only straight ahead and behind), so the sky stayed bright to the sides instead of fading.
+  * Stars squeezed ahead of the plane were averaged by texture filtering into a dim glow (the "dark hole" at 0.999), and stars behind were blown up into blobs. Real stars stay points, which led to drawing them from a catalog.
+
 ## wip-2: relativistic sky (2026-10-24)
 
 Commit `ba97255` (tag `wip-2`).

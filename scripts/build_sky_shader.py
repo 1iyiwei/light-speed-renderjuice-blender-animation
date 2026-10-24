@@ -58,9 +58,9 @@ class Builder:
     def link(self, src, dst):
         self.tree.links.new(src, dst)
 
-    def math(self, op, a, b=None, x=0, y=0):
+    def math(self, op, a, b=None, c=None, x=0, y=0):
         n = self.node("ShaderNodeMath", x, y, operation=op)
-        for socket, value in zip(n.inputs, (a, b)):
+        for socket, value in zip(n.inputs, (a, b, c)):
             if value is None:
                 continue
             if isinstance(value, bpy.types.NodeSocket):
@@ -80,7 +80,7 @@ class Builder:
                 socket.default_value = value
         if scale is not None:
             self.link(scale, n.inputs["Scale"])
-        return n.outputs["Value" if op == "DOT_PRODUCT" else "Vector"]
+        return n.outputs["Value" if op in ("DOT_PRODUCT", "LENGTH", "DISTANCE") else "Vector"]
 
 
 def new_group(name, tree_type="ShaderNodeTree"):

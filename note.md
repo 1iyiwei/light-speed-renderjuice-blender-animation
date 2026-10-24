@@ -11,7 +11,7 @@ Cargo-plane from Kitbash3D
 
 [NASA SVS’s Deep Star Maps](https://svs.gsfc.nasa.gov/4851/)
 
-[Where to download royalty free Blender models](https://share.google/aimode/rQzg94Jcj1Kq6nVVH).
+[Where to download royalty free Blender models](https://share.google/aimode/rQzg94Jcj1Kq6nVVH)
 
 Candidates:
 * https://sketchfab.com/3d-models/free-cyberpunk-hovercar-3205b1075bb44ffc826bce0c2a04d74c

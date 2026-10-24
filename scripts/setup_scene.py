@@ -81,11 +81,16 @@ def setup_camera_and_light(rig):
     if cam is None:
         cam = bpy.data.objects.new(CAMERA, bpy.data.cameras.new(CAMERA))
     move_to_collection(cam, coll)
-    cam.data.lens = 50
+    cam.data.lens = 35
     cam.data.clip_end = 1000
-    # Behind and above the tail, looking past the nose (the plane faces -Y).
-    cam.location = (4, 40, 9)
-    look_at(cam, (0, -5, 3))
+    # Behind, above and a little to the side, looking level along the flight
+    # path (the plane faces -Y). Level puts the direction of travel, where the
+    # relativistic sky collapses into a starbow, at the lens center, just past
+    # the nose, so the plane reads as flying into it; the height shows the
+    # afterburner plumes trailing toward the camera.
+    cam.location = (2.5, 32, 8.5)
+    look_at(cam, (2.5, 0, 8.5))
+    cam.data.shift_y = -0.06
     # Ride along with the plane: the camera is in the plane's rest frame.
     cam.parent = rig
     bpy.context.scene.camera = cam
@@ -95,7 +100,10 @@ def setup_camera_and_light(rig):
         sun = bpy.data.objects.new(SUN, bpy.data.lights.new(SUN, "SUN"))
     move_to_collection(sun, coll)
     sun.data.energy = 4
-    sun.rotation_euler = (math.radians(50), 0, math.radians(30))
+    # From behind, above and left of the chase camera: lights the side of the
+    # plane we see, and the near faces of the Earth and Moon we fly toward.
+    toward_sun = mathutils.Vector((0.35, 0.55, 0.75))
+    sun.rotation_euler = (-toward_sun).to_track_quat("-Z", "Y").to_euler()
 
     # The default collection is empty once everything has been moved out.
     default = bpy.data.collections.get("Collection")
