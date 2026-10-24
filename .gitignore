@@ -3,3 +3,4 @@
 *.zip
 assets/
 previews/
+__pycache__/

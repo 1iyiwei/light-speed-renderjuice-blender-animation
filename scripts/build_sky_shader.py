@@ -12,7 +12,8 @@ at speed beta (fraction of c) along a direction.
   came from the star-frame angle t, where
       cos t = (cos t' - beta) / (1 - beta cos t'),
   which crowds the sky toward the direction of travel.
-* Doppler factor: D = gamma (1 + beta cos t'), > 1 ahead (blue), < 1 behind (red).
+* Doppler factor: D = 1 / (gamma (1 - beta cos t')), > 1 ahead (blue), < 1
+  behind and to the side (red); looking sideways it is 1 / gamma.
 * Color shift: a blackbody at temperature T is seen as one at D T, so the
   pixel color is tinted by Blackbody(D T_ref) / Blackbody(T_ref).
 * Beaming: intensity scales by D ** k (k = 3 for specific intensity, 4 for
@@ -30,7 +31,12 @@ and world nodes are rebuilt from scratch.
 import bpy
 
 RIG = "F15"
-STARMAP = "//assets/starmap_2020_8k.exr"
+# The Milky Way without its bright stars; those are drawn as points by
+# build_star_points.py.
+STARMAP = "//assets/milkyway_2020_8k.exr"
+# The Milky Way map is brighter than the background of the combined NASA star
+# map; this brings it back to that level.
+MILKY_WAY_STRENGTH = 0.6
 # The plane faces -Y and flies along it.
 MOTION = (0.0, -1.0, 0.0)
 MAX_BETA = 0.9999
@@ -77,11 +83,11 @@ class Builder:
         return n.outputs["Value" if op == "DOT_PRODUCT" else "Vector"]
 
 
-def new_group(name):
+def new_group(name, tree_type="ShaderNodeTree"):
     old = bpy.data.node_groups.get(name)
     if old:
         bpy.data.node_groups.remove(old)
-    return bpy.data.node_groups.new(name, "ShaderNodeTree")
+    return bpy.data.node_groups.new(name, tree_type)
 
 
 def build_aberration():
@@ -125,10 +131,10 @@ def build_aberration():
     )
     b.link(star_dir, out.inputs["Vector"])
 
-    # D = gamma (1 + beta cos t'), gamma = 1 / sqrt(1 - beta^2)
+    # D = 1 / (gamma (1 - beta cos t')), gamma = 1 / sqrt(1 - beta^2)
     gamma = b.math("DIVIDE", 1.0, b.math("SQRT", b.math("SUBTRACT", 1.0, b.math("POWER", beta, 2.0, x=-800, y=-450), x=-600, y=-450), x=-400, y=-450), x=-200, y=-450)
-    boost = b.math("ADD", 1.0, b.math("MULTIPLY", beta, cos_obs, x=-400, y=-600), x=-200, y=-600)
-    b.link(b.math("MULTIPLY", gamma, boost, x=0, y=-500), out.inputs["Doppler"])
+    drop = b.math("SUBTRACT", 1.0, b.math("MULTIPLY", beta, cos_obs, x=-400, y=-600), x=-200, y=-600)
+    b.link(b.math("DIVIDE", 1.0, b.math("MULTIPLY", gamma, drop, x=0, y=-600), x=150, y=-500), out.inputs["Doppler"])
     peak = b.math("MULTIPLY", gamma, b.math("ADD", 1.0, beta, x=-200, y=-750), x=0, y=-700)
     b.link(peak, out.inputs["Peak Doppler"])
     return group
@@ -148,7 +154,7 @@ def build_doppler_shift():
     peak = face.new_socket("Peak Doppler", in_out="INPUT", socket_type="NodeSocketFloat")
     peak.default_value = 1.0
     comp = face.new_socket("Exposure Compensation", in_out="INPUT", socket_type="NodeSocketFloat")
-    comp.default_value, comp.min_value, comp.max_value = 0.8, 0.0, 1.0
+    comp.default_value, comp.min_value, comp.max_value = 0.5, 0.0, 1.0
     ref = face.new_socket("Reference Temperature", in_out="INPUT", socket_type="NodeSocketFloat")
     ref.default_value = 6500.0
     face.new_socket("Color", in_out="OUTPUT", socket_type="NodeSocketColor")
@@ -216,7 +222,7 @@ def build_world(aberration, doppler_shift, rig):
     world.use_nodes = True
     tree = world.node_tree
     image = bpy.data.images.load(STARMAP, check_existing=True)
-    tweaks = saved_inputs(tree, ("SkyRotation", "DopplerShift", "Background"))
+    tweaks = saved_inputs(tree, ("SkyRotation", "DopplerShift"))
     tree.nodes.clear()
 
     b = Builder(tree)
@@ -229,6 +235,7 @@ def build_world(aberration, doppler_shift, rig):
     env = b.node("ShaderNodeTexEnvironment", -550, 100, image=image, name="Starmap", label="Starmap")
     shift = b.node("ShaderNodeGroup", -250, 0, node_tree=doppler_shift, name="DopplerShift", label="Doppler Shift")
     bg = b.node("ShaderNodeBackground", 0, 0)
+    bg.inputs["Strength"].default_value = MILKY_WAY_STRENGTH
     output = b.node("ShaderNodeOutputWorld", 200, 0)
     restore_inputs(tree, tweaks)
 
