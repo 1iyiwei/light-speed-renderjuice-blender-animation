@@ -41,12 +41,13 @@ from build_sky_shader import AIRFRAME, RIG, Builder  # noqa: E402
 # the centerline and `pitch` up (degrees). The retro plumes are canted like an
 # airliner's thrust reversers: pointing straight ahead they would hide behind
 # the cockpit from the chase camera; canted, they splay into a V on both sides
-# of the nose (cos 25 deg ~ 90% of the thrust still points forward). `burns`
+# of the nose (cos 12 deg ~ 98% of the thrust still points forward; more
+# cant reads as sideways, since the camera sees the forward part end-on). `burns`
 # is the share of thrust a flame gets, from the burn direction d.
 ENGINES = {
     "Afterburner": {"nozzles": {"L": (0.67, 8.6, 2.35), "R": (-0.67, 8.6, 2.35)}, "yaw": 0.0, "cant": 0.0, "pitch": 0.0,
                     "radius": 0.42, "tail_radius": 0.18, "length": 6.0, "burns": "max(d, 0)", "light": 400.0},
-    "Retro": {"nozzles": {"L": (0.66, -7.0, 2.25), "R": (-0.66, -7.0, 2.25)}, "yaw": math.pi, "cant": 25.0, "pitch": 8.0,
+    "Retro": {"nozzles": {"L": (0.66, -7.0, 2.25), "R": (-0.66, -7.0, 2.25)}, "yaw": math.pi, "cant": 12.0, "pitch": 8.0,
               "radius": 0.24, "tail_radius": 0.12, "length": 6.0, "burns": "max(-d, 0)", "light": 300.0},
 }
 SHOCK_DIAMONDS = 5
@@ -201,6 +202,9 @@ def build(rig):
             light = bpy.data.lights.get(name) or bpy.data.lights.new(name, "POINT")
             light.color = (1.0, 0.55, 0.25)
             light.shadow_soft_size = 0.3
+            # Shadows from the plume glow add nothing visible, and four more
+            # shadow-casting lights overflow EEVEE's shadow pool.
+            light.use_shadow = False
             lamp = get_object(name, light, coll, flame)
             lamp.location = (0.0, 1.2, 0.0)
             add_driver(light, "energy", f"{spec['light']} * thrust * {spec['burns']}", burn)

@@ -44,8 +44,8 @@ AU_KM = 1.496e8
 # Jupiter at its closest to Earth, if the planets lined up along the flight path.
 JUPITER_KM = 4.2 * AU_KM
 # Where the plane stops, short of Jupiter's center (radius 69,911 km): close
-# enough for Jupiter to fill a good part of the frame.
-STANDOFF_KM = 450000.0
+# enough for Jupiter to fill a good part of the frame, with room above it.
+STANDOFF_KM = 500000.0
 TRIP_KM = JUPITER_KM - STANDOFF_KM
 
 # Timeline (seconds).

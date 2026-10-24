@@ -98,10 +98,12 @@ def setup_camera_and_light(rig):
     # path (the plane faces -Y). Level puts the direction of travel, where the
     # relativistic sky collapses into a starbow, at the lens center, just past
     # the nose, so the plane reads as flying into it; the height shows the
-    # afterburner plumes trailing toward the camera.
+    # afterburner plumes trailing toward the camera. The shift lowers the
+    # frame just enough to keep the longest plumes (peak thrust) in it without
+    # cutting off Jupiter at the top on arrival.
     cam.location = (2.5, 32, 8.5)
     look_at(cam, (2.5, 0, 8.5))
-    cam.data.shift_y = -0.06
+    cam.data.shift_y = -0.14
     # Ride along with the plane: the camera is in the plane's rest frame.
     cam.parent = rig
     bpy.context.scene.camera = cam
@@ -111,6 +113,10 @@ def setup_camera_and_light(rig):
         sun = bpy.data.objects.new(SUN, bpy.data.lights.new(SUN, "SUN"))
     move_to_collection(sun, coll)
     sun.data.energy = 4
+    # The sun's shadow map has to cover every opaque surface in view, out to
+    # the Earth, Moon, rocks and Jupiter 300-850 m away; the default pool
+    # (512 MB) overflows ("Shadow buffer full").
+    bpy.context.scene.eevee.shadow_pool_size = "1024"
     # From behind, above and left of the chase camera: lights the side of the
     # plane we see, and the near faces of the Earth and Moon we fly toward.
     toward_sun = mathutils.Vector((0.35, 0.55, 0.75))
