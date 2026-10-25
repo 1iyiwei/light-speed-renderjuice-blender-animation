@@ -1,7 +1,7 @@
 # [⁠RenderJuice "Speed" Blender animation (5-30 sec)](https://www.renderjuice.com/contests/speed)
 
 ## Title
-From Earth to Jupiter in 25 seconds
+From Earth to Jupiter in 23 seconds
 
 Some earlier alternatives:
 * Light speed
