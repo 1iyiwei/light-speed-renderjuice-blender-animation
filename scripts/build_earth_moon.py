@@ -40,7 +40,7 @@ import mathutils
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from animate_speed import STANDOFF_KM  # noqa: E402
-from build_sky_shader import MAX_RAPIDITY, MOTION, RIG, Builder, boost, new_group  # noqa: E402
+from build_sky_shader import MAX_RAPIDITY, MOTION, RIG, Builder, Interface, boost, new_group  # noqa: E402
 
 # Centers in km, stars' frame, relative to the plane's start. The plane starts
 # about 1,300 km above the Earth, which lies ahead and below with its limb just
@@ -124,7 +124,7 @@ def sphere_mesh(name, radius, segments, orient, flattening=0.0):
 
 def build_node_group():
     group = new_group("RelativisticBody", "GeometryNodeTree")
-    face = group.interface
+    face = Interface(group)
     face.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
     face.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
     face.new_socket("Camera", in_out="INPUT", socket_type="NodeSocketObject")
@@ -133,6 +133,7 @@ def build_node_group():
     face.new_socket("Distance", in_out="INPUT", socket_type="NodeSocketFloat")
     face.new_socket("Direction", in_out="INPUT", socket_type="NodeSocketVector").default_value = MOTION
     face.new_socket("Center", in_out="INPUT", socket_type="NodeSocketVector")
+    face.done()
 
     b = Builder(group)
     inp = b.node("NodeGroupInput", -2000, 0)

@@ -33,7 +33,7 @@ import sys
 import bpy
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_sky_shader import MAX_RAPIDITY, MOTION, RIG, Builder, boost, new_group  # noqa: E402
+from build_sky_shader import MAX_RAPIDITY, MOTION, RIG, Builder, Interface, boost, new_group  # noqa: E402
 
 CATALOG = "//assets/hygdata_v41.csv"
 MAG_LIMIT = 10.0
@@ -118,11 +118,12 @@ def build_material():
 
 def build_node_group(material):
     group = new_group("RelativisticStars", "GeometryNodeTree")
-    group.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-    group.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    face = Interface(group)
+    face.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+    face.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
 
     def add_input(name, kind, default=None, lo=None, hi=None):
-        socket = group.interface.new_socket(name, in_out="INPUT", socket_type=kind)
+        socket = face.new_socket(name, in_out="INPUT", socket_type=kind)
         if default is not None:
             socket.default_value = default
         if lo is not None:
@@ -139,6 +140,7 @@ def build_node_group(material):
     add_input("Flux Scale", "NodeSocketFloat", FLUX_SCALE)
     add_input("Star Radius", "NodeSocketFloat", 2e-4)
     add_input("Sphere Radius", "NodeSocketFloat", SPHERE_RADIUS)
+    face.done()
 
     b = Builder(group)
     inp = b.node("NodeGroupInput", -2000, 0)

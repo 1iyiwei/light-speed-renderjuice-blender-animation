@@ -95,13 +95,40 @@ class Builder:
 
 
 def new_group(name, tree_type="ShaderNodeTree"):
-    """An empty node group, rebuilt in place if it exists so materials using it keep their link."""
+    """A node group with no nodes, rebuilt in place if it exists.
+
+    Declare its sockets with Interface, which keeps existing ones: deleting a
+    socket would cut the links into and out of every node using the group,
+    and reset their input values.
+    """
     group = bpy.data.node_groups.get(name)
     if group is None or group.bl_idname != tree_type:
         return bpy.data.node_groups.new(name, tree_type)
     group.nodes.clear()
-    group.interface.clear()
     return group
+
+
+class Interface:
+    """Declares a node group's sockets, reusing existing ones with the same name, direction and type."""
+
+    def __init__(self, group):
+        self.group = group
+        self.kept = []
+
+    def new_socket(self, name, in_out, socket_type):
+        for item in self.group.interface.items_tree:
+            if (item.item_type == "SOCKET" and item.name == name and item.in_out == in_out
+                    and item.socket_type == socket_type and item not in self.kept):
+                self.kept.append(item)
+                return item
+        item = self.group.interface.new_socket(name, in_out=in_out, socket_type=socket_type)
+        self.kept.append(item)
+        return item
+
+    def done(self):
+        """Remove sockets that were not declared (left over from an earlier version)."""
+        for item in [i for i in self.group.interface.items_tree if i.item_type == "SOCKET" and i not in self.kept]:
+            self.group.interface.remove(item)
 
 
 def boost(b, d, n, phi, to_star_frame, x=0, y=0):
@@ -143,7 +170,7 @@ def boost(b, d, n, phi, to_star_frame, x=0, y=0):
 def build_aberration():
     """View direction in the moving frame -> direction in the star frame."""
     group = new_group("RelativisticAberration")
-    face = group.interface
+    face = Interface(group)
     face.new_socket("View", in_out="INPUT", socket_type="NodeSocketVector")
     phi = face.new_socket("Rapidity", in_out="INPUT", socket_type="NodeSocketFloat")
     phi.min_value, phi.max_value = 0.0, MAX_RAPIDITY
@@ -152,6 +179,7 @@ def build_aberration():
     face.new_socket("Vector", in_out="OUTPUT", socket_type="NodeSocketVector")
     face.new_socket("Doppler", in_out="OUTPUT", socket_type="NodeSocketFloat")
     face.new_socket("Peak Doppler", in_out="OUTPUT", socket_type="NodeSocketFloat")
+    face.done()
 
     b = Builder(group)
     inp = b.node("NodeGroupInput", -1200, 0)
@@ -169,7 +197,7 @@ def build_aberration():
 def build_doppler_shift():
     """Tint and brighten a color by the Doppler factor."""
     group = new_group("RelativisticDopplerShift")
-    face = group.interface
+    face = Interface(group)
     face.new_socket("Color", in_out="INPUT", socket_type="NodeSocketColor")
     doppler = face.new_socket("Doppler", in_out="INPUT", socket_type="NodeSocketFloat")
     doppler.default_value = 1.0
@@ -184,6 +212,7 @@ def build_doppler_shift():
     ref = face.new_socket("Reference Temperature", in_out="INPUT", socket_type="NodeSocketFloat")
     ref.default_value = 6500.0
     face.new_socket("Color", in_out="OUTPUT", socket_type="NodeSocketColor")
+    face.done()
 
     b = Builder(group)
     inp = b.node("NodeGroupInput", -900, 0)
@@ -231,8 +260,8 @@ TUNABLE_NODES = ("SkyRotation", "DopplerShift")
 def saved_inputs(world):
     """Unlinked input values of the tunable world nodes, by node and input name.
 
-    Read these before rebuilding the node groups: rebuilding a group's
-    interface resets the inputs of nodes that use it.
+    build_world recreates the world's nodes, so their hand-tuned values are
+    read first and put back afterwards.
     """
     values = {}
     if world is None or world.node_tree is None:
@@ -300,11 +329,11 @@ def build_world(aberration, doppler_shift, rig, tweaks):
 
 
 def reset_group_users(group):
-    """Set inputs of group nodes using `group` outside the world back to its defaults.
+    """Set unlinked inputs of group nodes using `group` outside the world to its defaults.
 
-    Rebuilding a group's interface in place zeroes the inputs of every node
-    using it; the bodies' materials drive the look controls from the world, but
-    their other inputs need their defaults back.
+    The bodies' materials drive the look controls from the world; this keeps
+    their other inputs (such as the reference temperature) at the defaults,
+    also in files saved by earlier versions of these scripts, which reset them.
     """
     defaults = {item.name: item.default_value for item in group.interface.items_tree
                 if item.item_type == "SOCKET" and item.in_out == "INPUT" and hasattr(item, "default_value")}

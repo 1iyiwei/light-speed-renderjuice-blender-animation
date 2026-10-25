@@ -15,6 +15,7 @@ The blender scene itself can be simple - just a vehicle (spaceship or plane) mov
 ## Progress
 
 WIP milestones, with contact sheets and the git tag of each, are logged in [docs/progress.md](docs/progress.md).
+Award strategy and the draft entry text are in [docs/submission.md](docs/submission.md).
 
 ## Scene setup
 
@@ -55,10 +56,19 @@ blender -b light_speed.blend --python scripts/build_earth_moon.py
 blender -b light_speed.blend --python scripts/build_asteroids.py
 ```
 
+```bash
+blender -b light_speed.blend --python scripts/build_rainbow.py
+```
+
+```bash
+blender -b light_speed.blend --python scripts/build_hud.py
+```
+
 What to re-run after a change:
 
 * Camera lens or render resolution: `build_star_points.py` (it sizes the stars in pixels).
-* Thrust or burn direction curves (hand-edited in the Graph Editor): `animate_speed.py` (it re-bakes rapidity and distance), then `build_earth_moon.py` (Jupiter sits where the trip ends) and `build_asteroids.py` (rocks are timed from the distance).
+* Thrust or burn direction curves (hand-edited in the Graph Editor): `animate_speed.py` (it re-bakes rapidity and distance), then `build_earth_moon.py` (Jupiter sits where the trip ends), `build_asteroids.py` (rocks are timed from the distance), `build_rainbow.py` (the stripes' scroll is baked from the rapidity) and `build_hud.py` (the end card shows the trip's numbers).
+* Camera lens or shift: also `build_hud.py` (it places the clocks and end card inside the frame).
 * Sun direction: `build_earth_moon.py` and `build_asteroids.py` (they light the surfaces).
 * `animate_speed.py -- --reset` replaces hand-edited curves with the defaults; `build_sky_shader.py -- --reset` does the same for the look controls.
 
@@ -83,6 +93,10 @@ The physics, script by script:
   Each vertex gets the same aberration as the stars and is drawn on a shell 300-850 m from the camera, ordered by true distance; surfaces are sunlit in the stars' frame, then Doppler-shifted and beamed like the sky.
 * `build_asteroids.py`: 700 rocks between the Earth and the Moon, timed to pass steadily over the first ~3 s of the burn, 1,500-40,000 km from the flight path, so they stream outward from the direction of travel (the forward-motion cue the stars can't give), then bend forward toward the starbow as the speed climbs.
   The density is artistic license (that space is nearly empty); the motion is real scale, through the same transform as the Earth and Moon.
+* `build_rainbow.py`: an artistic layer inspired by Tesla's Rainbow Road, kept out of the physics' way: bands of light on the plane's own skin (in the pilot's frame) sweep from nose to tail, each a small spectrum from violet on its nose side to red on its tail side (a nod to the blue-ahead, red-behind Doppler shift outside).
+  They scroll at a speed proportional to the rapidity (baked into `F15["rainbow_offset"]`, capped so they never strobe at 30 fps) and brighten with beta, so they are invisible at rest.
+  It adds a `RainbowOverlay` shader group on top of the F-15's opaque materials.
+* `build_hud.py`: on-screen clocks in the top-left corner (pilot clock, Earth clock, speed, gamma, distance), as Geometry Nodes text (Format String to String to Curves) driven by the baked rapidity, distance and `F15["earth_time_s"]`, so they update every frame without Python at render time; an end card after the arrival ("628 million km to Jupiter / 23 seconds for the pilot, 35 minutes on Earth") with the RenderJuice wordmark; and the RenderJuice can on the outside of both tail fins.
 
 Render a quick preview video (half resolution, 16 samples; does not modify the `.blend`) to `previews/preview.mp4`:
 
@@ -91,7 +105,7 @@ blender -b light_speed.blend --python scripts/render_preview.py
 ```
 
 Assets live under `assets/` (git-ignored) and are linked from there, not packed into the `.blend`:
-`f-15a-eagle-usaf-76-0020-duxford/`, `milkyway_2020_8k.exr`, `hygdata_v41.csv`, `world.200412.3x5400x2700.jpg`, `lroc_color_poles_4k.tif`, `PIA07782.jpg` (`starmap_2020_8k.exr` is the older combined map, now unused).
+`f-15a-eagle-usaf-76-0020-duxford/`, `RenderJuice-Logo-Pack/` (from the contest Discord), `milkyway_2020_8k.exr`, `hygdata_v41.csv`, `world.200412.3x5400x2700.jpg`, `lroc_color_poles_4k.tif`, `PIA07782.jpg` (`starmap_2020_8k.exr` is the older combined map, now unused).
 
 ## Credits
 
@@ -100,4 +114,6 @@ Assets live under `assets/` (git-ignored) and are linked from there, not packed 
 * Earth: NASA Earth Observatory, [Blue Marble Next Generation](https://visibleearth.nasa.gov/images/74218) (December 2004), Reto Stöckli.
 * Moon: NASA's Scientific Visualization Studio, [CGI Moon Kit](https://svs.gsfc.nasa.gov/4720/), Ernie Wright, from Lunar Reconnaissance Orbiter data.
 * Jupiter: NASA/JPL/Space Science Institute, Cassini global map [PIA07782](https://photojournal.jpl.nasa.gov/catalog/PIA07782).
+* RenderJuice logo: RenderJuice, from the logo pack shared on the contest Discord.
+* Clock and card font: DejaVu Sans Mono, bundled with Blender.
 * Star catalog: [HYG Database](https://github.com/astronexus/HYG-Database) v4.1 by David Nash (astronexus), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).

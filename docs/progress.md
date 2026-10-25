@@ -32,3 +32,33 @@ Commit `ba97255` (tag `wip-2`).
 * World shader for aberration, Doppler color shift and beaming, driven by `F15["beta"]`.
 * Bright stars drawn as 108k catalog points (HYG) over a Milky-Way-only map, so the sky ahead collapses into a sparkling starbow instead of a blurry glow.
 * Chase camera at beta = 0, 0.5, 0.9 (top row), 0.99, 0.999, then a camera aimed along the flight path at 0.999.
+
+<!--
+physically correct but visually counter-intuitive - the stars cluster towards where the vehicle is moving to giving the impression that it is moving backward (2026-10-24)
+-->
+
+<a href="https://youtu.be/5vq9ntRFD-o">
+<img src="https://img.youtube.com/vi/5vq9ntRFD-o/mqdefault.jpg" width=320>
+</a>
+
+## wip-3: direction cues to counter the counter-intuitive warping effect: earth and moon for anchoring, and asteroids for vection (2026-10-24)
+
+<a href="https://youtu.be/JlnyL4PsOVI">
+<img src="https://img.youtube.com/vi/JlnyL4PsOVI/mqdefault.jpg" width=320>
+</a>
+
+## wip-4: slowing down after reaching peak speed but the directional flip looks unnatural
+
+https://youtu.be/gJxubWsJA_c
+
+## wip-5: retro thrusters for slowing down, pointing 25° out, 8° up for visibility from the current camera angle.
+
+https://youtu.be/wzp1PKvSnt0
+
+## wip-6: rockets angled 12° outward and 8° up with a viewport that won't cut off the afterburner
+
+https://youtu.be/iBoEott07nU
+
+## wip-7: (Tesla-inspired) rainbow projection for fun artistic flavor and speed visualization
+
+https://youtu.be/zq631Oqnygw

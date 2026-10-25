@@ -30,7 +30,7 @@ import mathutils
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_earth_moon import EARTH_CENTER, SUN_RADIANCE, add_doppler_shift, add_driver  # noqa: E402
-from build_sky_shader import MOTION, RIG, Builder, new_group  # noqa: E402
+from build_sky_shader import MOTION, RIG, Builder, Interface, new_group  # noqa: E402
 
 SEED = 7
 COUNT = 700
@@ -87,8 +87,10 @@ def points_mesh(rocks):
 def build_field_group(material):
     """Points -> lumpy rocks (km), realized so the relativistic transform can move each vertex."""
     group = new_group("AsteroidField", "GeometryNodeTree")
-    group.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-    group.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    face = Interface(group)
+    face.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+    face.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    face.done()
     b = Builder(group)
     inp = b.node("NodeGroupInput", -1200, 0)
     out = b.node("NodeGroupOutput", 800, 0)

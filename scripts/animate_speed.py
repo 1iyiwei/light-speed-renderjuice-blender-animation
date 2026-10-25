@@ -21,7 +21,9 @@ plane leaves the Earth, collapses the sky ahead to a point at peak gamma
 (several hundred), unwinds it while braking, and comes to rest STANDOFF_KM
 short of Jupiter (placed by build_earth_moon.py from the baked distance).
 F15["distance_km"], the distance flown in the stars' frame, grows as
-c sinh(phi) per unit proper time. F15["beta"] is driven from the rapidity for
+c sinh(phi) per unit proper time, and F15["earth_time_s"], the time on Earth's
+(the stars' frame) clocks, as cosh(phi): about 35 minutes for the pilot's 25
+seconds. F15["beta"] is driven from the rapidity for
 reading only.
 
 Safe to re-run: hand-edited thrust and burn_direction curves are kept
@@ -55,7 +57,7 @@ BURN_S = 10.0  # accelerating
 CUT_S = 0.2  # thrust cut at the end of a burn
 COAST_S = 1.0  # engines off, switching from afterburners to retro-rockets
 BRAKE_S = BURN_S
-ARRIVE_S = 2.0  # at rest at Jupiter
+ARRIVE_S = 4.0  # at rest at Jupiter, with room for the end card
 # Thrust at the start and end of each burn (braking mirrors accelerating).
 THRUST_LOW, THRUST_HIGH = 0.6, 1.4
 
@@ -132,22 +134,25 @@ def key_controls(rig, airframe, scene, reset):
 
 
 def integrate(rig, scene, rate):
-    """Per-frame rapidity and distance (km) for a given rapidity rate (1/s per unit thrust)."""
+    """Per-frame rapidity, distance (km) and Earth time (s) for a rapidity rate (1/s per unit thrust)."""
     thrust = get_curve(rig, '["thrust"]')
     direction = get_curve(rig, '["burn_direction"]')
     step = 1.0 / (FPS * SUBSTEPS)
-    phi, distance = [0.0], [0.0]
+    phi, distance, earth = [0.0], [0.0], [0.0]
     for f in range(scene.frame_start + 1, scene.frame_end + 1):
-        p, d = phi[-1], distance[-1]
+        p, d, e = phi[-1], distance[-1], earth[-1]
         for i in range(SUBSTEPS):
             t = f - 1 + (i + 0.5) / SUBSTEPS
             change = rate * thrust.evaluate(t) * direction.evaluate(t) * step
-            # Midpoint rule: distance at the rapidity half a step in.
-            d += C_KM_S * math.sinh(max(p + 0.5 * change, 0.0)) * step
+            # Midpoint rule: distance and time at the rapidity half a step in.
+            mid = max(p + 0.5 * change, 0.0)
+            d += C_KM_S * math.sinh(mid) * step
+            e += math.cosh(mid) * step
             p = max(p + change, 0.0)
         phi.append(p)
         distance.append(d)
-    return phi, distance
+        earth.append(e)
+    return phi, distance, earth
 
 
 def solve_rate(rig, scene):
@@ -163,10 +168,11 @@ def solve_rate(rig, scene):
 
 
 def bake(rig, scene, rate):
-    phi, distance = integrate(rig, scene, rate)
+    phi, distance, earth = integrate(rig, scene, rate)
     for prop, values, desc in (
             ("rapidity", phi, "Rapidity phi, baked from thrust: beta = tanh(phi), gamma = cosh(phi)"),
-            ("distance_km", distance, "Distance flown in the stars' frame (km), baked from rapidity")):
+            ("distance_km", distance, "Distance flown in the stars' frame (km), baked from rapidity"),
+            ("earth_time_s", earth, "Time on Earth's clocks (s), baked from rapidity")):
         remove_curve(rig, f'["{prop}"]')
         rig[prop] = 0.0
         rig.id_properties_ui(prop).update(min=0.0, description=desc)
@@ -175,7 +181,8 @@ def bake(rig, scene, rate):
     assert peak < MAX_RAPIDITY, peak
     print(f"Rapidity rate {rate:.4f}/s per unit thrust; peak gamma {math.cosh(peak):.0f} "
           f"(beta = 1 - {1 - math.tanh(peak):.1e}); final rapidity {phi[-1]:.2e}; "
-          f"distance {distance[-1]:,.0f} km ({distance[-1] / AU_KM:.2f} AU) in {(scene.frame_end - 1) / FPS:.1f} s")
+          f"distance {distance[-1]:,.0f} km ({distance[-1] / AU_KM:.2f} AU) in {(scene.frame_end - 1) / FPS:.1f} s "
+          f"(Earth clocks: {earth[-1] / 60:.1f} min)")
 
 
 def drive_beta(rig):
