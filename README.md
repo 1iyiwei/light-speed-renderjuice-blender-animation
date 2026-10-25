@@ -93,6 +93,7 @@ The physics, script by script:
   Each vertex gets the same aberration as the stars and is drawn on a shell 300-850 m from the camera, ordered by true distance; surfaces are sunlit in the stars' frame, then Doppler-shifted and beamed like the sky.
 * `build_asteroids.py`: 700 rocks between the Earth and the Moon, timed to pass steadily over the first ~3 s of the burn, 1,500-40,000 km from the flight path, so they stream outward from the direction of travel (the forward-motion cue the stars can't give), then bend forward toward the starbow as the speed climbs.
   The density is artistic license (that space is nearly empty); the motion is real scale, through the same transform as the Earth and Moon.
+  About 30% of them are RenderJuice cans (procedural Geometry Nodes cans with the wordmark as their label), and one big hero can floats ahead during the ignition hold, then whips past as thrust starts; their size is a joke (thousands of km tall, to stay visible like the rocks). Everything tumbles slowly on Earth's clock.
 * `build_rainbow.py`: an artistic layer inspired by Tesla's Rainbow Road, kept out of the physics' way: bands of light on the plane's own skin (in the pilot's frame) sweep from nose to tail, each a small spectrum from violet on its nose side to red on its tail side (a nod to the blue-ahead, red-behind Doppler shift outside).
   They scroll at a speed proportional to the rapidity (baked into `F15["rainbow_offset"]`, capped so they never strobe at 30 fps) and brighten with beta, so they are invisible at rest.
   It adds a `RainbowOverlay` shader group on top of the F-15's opaque materials.
@@ -102,6 +103,12 @@ Render a quick preview video (half resolution, 16 samples; does not modify the `
 
 ```bash
 blender -b light_speed.blend --python scripts/render_preview.py
+```
+
+Render the final video (1920x1080, 64 samples, about 5 s per frame, an hour in all) to `previews/final.mp4`. Frames go to `previews/final_frames/` first, so an interrupted render resumes where it stopped when the same command is run again; then ffmpeg encodes them (H.264, CRF 16):
+
+```bash
+blender -b light_speed.blend --python scripts/render_preview.py -- --percent 100 --samples 64 --out final --sequence
 ```
 
 Assets live under `assets/` (git-ignored) and are linked from there, not packed into the `.blend`:

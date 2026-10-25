@@ -27,7 +27,7 @@ Since an entry can win at most one Major or Specialty award, "more ways to win" 
 ### Additions
 
 1. **On-screen clocks (the biggest win, done in `build_hud.py`).** A small, clean readout ticking in a corner: the pilot's clock, an Earth clock, gamma and the distance flown. From launch to rest at Jupiter the pilot's clock reaches 0:22.6 while the Earth clock reaches 35:00 (minutes), close to the 34.9 minutes light itself needs for those 628 million km; gamma peaks at about 700. That one contrast explains the whole piece to non-physicists (Idea, Use of Speed) and is animated typography (Motion Design). The text is Geometry Nodes driven by the baked animation (`F15["rapidity"]`, `F15["distance_km"]`, `F15["earth_time_s"]`), which also strengthens the procedural workflow story.
-2. **RenderJuice logo (done).** The can from the logo pack shared on the contest Discord is on both tail fins, and the wordmark fades in on the end card. It costs little and does not hurt the other categories.
+2. **RenderJuice logo (done).** The can from the logo pack shared on the contest Discord is on both tail fins, the wordmark fades in on the end card, and RenderJuice cans tumble through the asteroid field, with a giant one floating ahead at launch that the plane whips past. That makes RenderJuice part of the idea, as the Promo award asks, rather than only a decal. It costs little and does not hurt the other categories.
 3. **Closing line (done).** The end card after the arrival reads "628 million km to Jupiter / 23 seconds for the pilot, 35 minutes on Earth", the clocks' payoff.
 
 ## Entry text (draft)

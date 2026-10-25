@@ -94,6 +94,9 @@ def setup_camera_and_light(rig):
     move_to_collection(cam, coll)
     cam.data.lens = 35
     cam.data.clip_end = 1000
+    # As far out as the on-screen overlays (1 m ahead) allow: depth precision
+    # at the far shells (300-900 m) scales with the near clip distance.
+    cam.data.clip_start = 0.5
     # Behind, above and a little to the side, looking level along the flight
     # path (the plane faces -Y). Level puts the direction of travel, where the
     # relativistic sky collapses into a starbow, at the lens center, just past

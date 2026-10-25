@@ -62,3 +62,11 @@ https://youtu.be/iBoEott07nU
 ## wip-7: (Tesla-inspired) rainbow projection for fun artistic flavor and speed visualization
 
 https://youtu.be/zq631Oqnygw
+
+## wip-8: adding clocks and the RenderJuice logo
+
+https://youtu.be/WfO4vC5za3Y
+
+## wip-9: adding some RenderJuice cans (one big and many small)
+
+https://youtu.be/O6ucVJOKp78
