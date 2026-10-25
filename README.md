@@ -105,14 +105,20 @@ Render a quick preview video (half resolution, 16 samples; does not modify the `
 blender -b light_speed.blend --python scripts/render_preview.py
 ```
 
-Render the final video (1920x1080, 64 samples, about 5 s per frame, an hour in all) to `previews/final.mp4`. Frames go to `previews/final_frames/` first, so an interrupted render resumes where it stopped when the same command is run again; then ffmpeg encodes them (H.264, CRF 16):
+Render the final video (1920x1080, 64 samples; about 3.5 hours on an Apple-silicon Mac, the high-speed and asteroid frames being the slowest) to `previews/final.mp4`. Frames go to `previews/final_frames/` first, so an interrupted render resumes where it stopped when the same command is run again; then ffmpeg encodes them (H.264, CRF 16):
 
 ```bash
 blender -b light_speed.blend --python scripts/render_preview.py -- --percent 100 --samples 64 --out final --sequence
 ```
 
+Add the background music (the track's drop lands at 11.0 s, top speed; fades in and out; the video is copied, not re-encoded):
+
+```bash
+scripts/add_music.sh previews/final.mp4 previews/final_music.mp4
+```
+
 Assets live under `assets/` (git-ignored) and are linked from there, not packed into the `.blend`:
-`f-15a-eagle-usaf-76-0020-duxford/`, `RenderJuice-Logo-Pack/` (from the contest Discord), `milkyway_2020_8k.exr`, `hygdata_v41.csv`, `world.200412.3x5400x2700.jpg`, `lroc_color_poles_4k.tif`, `PIA07782.jpg` (`starmap_2020_8k.exr` is the older combined map, now unused).
+`f-15a-eagle-usaf-76-0020-duxford/`, `RenderJuice-Logo-Pack/` (from the contest Discord), `milkyway_2020_8k.exr`, `hygdata_v41.csv`, `world.200412.3x5400x2700.jpg`, `lroc_color_poles_4k.tif`, `PIA07782.jpg`, `nastelbom-space-galaxy-universe-music-357376.mp3` (`starmap_2020_8k.exr` is the older combined map, now unused).
 
 ## Credits
 
@@ -121,6 +127,7 @@ Assets live under `assets/` (git-ignored) and are linked from there, not packed 
 * Earth: NASA Earth Observatory, [Blue Marble Next Generation](https://visibleearth.nasa.gov/images/74218) (December 2004), Reto Stöckli.
 * Moon: NASA's Scientific Visualization Studio, [CGI Moon Kit](https://svs.gsfc.nasa.gov/4720/), Ernie Wright, from Lunar Reconnaissance Orbiter data.
 * Jupiter: NASA/JPL/Space Science Institute, Cassini global map [PIA07782](https://photojournal.jpl.nasa.gov/catalog/PIA07782).
+* Music: "Space Galaxy Universe" by [Dmitrii Spis](https://pixabay.com/users/nastelbom-48128234/) from [Pixabay](https://pixabay.com/music/) (Pixabay Content License).
 * RenderJuice logo: RenderJuice, from the logo pack shared on the contest Discord.
 * Clock and card font: DejaVu Sans Mono, bundled with Blender.
 * Star catalog: [HYG Database](https://github.com/astronexus/HYG-Database) v4.1 by David Nash (astronexus), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).

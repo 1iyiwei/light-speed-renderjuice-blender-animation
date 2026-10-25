@@ -2,6 +2,8 @@
 
 Notes for entering the [RenderJuice "Speed" contest](https://www.renderjuice.com/contests/speed#rules): which awards fit, and the text for the entry.
 
+Official entry under [this Discord post](https://discord.com/channels/1547269486057627728/1563848765276815430); final video on [YouTube](https://youtu.be/4M4FqIFfBvA).
+
 ## Key rules
 
 * **Format:** a 5-30 s MP4 (or public video link) posted in Discord `#contest-submissions`, with a short description and one Blender work-in-progress image. A `.blend` is not required, but admins may ask for project files before confirming an award.
@@ -16,12 +18,12 @@ Since an entry can win at most one Major or Specialty award, "more ways to win" 
 
 | Award | Fit | Notes |
 |---|---|---|
-| Major (1st-3rd) | Strong | Idea: the speed theme taken to its physical limit, with a clear arc (launch, collapse to a point, unwind, arrival). Use of Speed is the whole piece. The biggest gap is making the idea readable to viewers who don't know relativity (see the on-screen clocks below). |
+| Major (1st-3rd) | Strong | Idea: the speed theme taken to its physical limit, with a clear arc (launch, collapse to a point, unwind, arrival). Use of Speed is the whole piece. The on-screen clocks make the idea readable to viewers who don't know relativity (see below). |
 | Best Procedural & Programmatic Animation | Strong, our main specialty | Eligibility needs Geometry Nodes, the bpy API or code to be a substantial part, with the workflow described. Everything here is built by Python scripts and Geometry Nodes (see the workflow text below). |
 | Best Simulation & FX | Weak | Eligibility needs Blender physics or simulation (particles, fluids, smoke, cloth, rigid bodies, hair) to be substantial. The stars, rocks, Earth, Moon and Jupiter are moved by formulas evaluated per frame, not simulated, and the flames are shaders. That is procedural animation, not simulation, so we should not claim this category. Adding a token simulation (say, a Geometry Nodes simulation zone for exhaust sparks) would not change that it is a minor part, and could only win instead of, not on top of, the procedural award. |
-| Best Motion Design | Possible, with work | Eligibility needs animated typography, shapes or graphic elements. On-screen clocks would add exactly that, and help the Major score more (see below). |
+| Best Motion Design | Possible, secondary | Eligibility needs animated typography, shapes or graphic elements. The on-screen clocks and end card are exactly that, though a smaller part of the piece than the procedural work. |
 | Funniest Animation | No | It needs the piece to be built around a joke. A light closing line can add charm, but it would not make this a comedy entry. |
-| Best RenderJuice Promo | Cheap hedge | RenderJuice, its logo or its service has to be part of the idea. A logo decal on the plane is easy; tying it into the idea (an end card, see below) makes it count for more. |
+| Best RenderJuice Promo | Good | RenderJuice, its logo or its service has to be part of the idea. Beyond the logo on the tail fins and the end card, RenderJuice cans tumble through the asteroid field, and a giant one floats ahead at launch until the plane whips past it. |
 | Community Choice | Everyone is entered | Decided by 🔥 reactions on the Discord entry post. A memorable thumbnail (the starbow, or the Jupiter arrival) and the WIP thread help. |
 
 ### Additions
@@ -30,7 +32,7 @@ Since an entry can win at most one Major or Specialty award, "more ways to win" 
 2. **RenderJuice logo (done).** The can from the logo pack shared on the contest Discord is on both tail fins, the wordmark fades in on the end card, and RenderJuice cans tumble through the asteroid field, with a giant one floating ahead at launch that the plane whips past. That makes RenderJuice part of the idea, as the Promo award asks, rather than only a decal. It costs little and does not hurt the other categories.
 3. **Closing line (done).** The end card after the arrival reads "628 million km to Jupiter / 23 seconds for the pilot, 35 minutes on Earth", the clocks' payoff.
 
-## Entry text (draft)
+## Entry text
 
 **Title:** From Earth to Jupiter in 25 Seconds
 
@@ -44,11 +46,12 @@ Since an entry can win at most one Major or Specialty award, "more ways to win" 
 >
 > * Relativistic sky: a world shader (node groups built by script) applies aberration, Doppler color shift and relativistic beaming to NASA's Milky Way map.
 > * Stars: 108,000 stars from the HYG catalog, placed by Geometry Nodes and moved with the same aberration and Doppler formulas, so they pile up into a sparkling point instead of a blur.
-> * Earth, Moon, Jupiter and 700 asteroids: real-scale meshes whose vertices are transformed by Geometry Nodes every frame, so they stream past and distort as the relativistic plane sees them.
+> * Earth, Moon, Jupiter and 700 asteroids and RenderJuice cans: real-scale meshes whose vertices are transformed by Geometry Nodes every frame, so they stream past and distort as the relativistic plane sees them.
 > * Motion: a single keyframed thrust curve; a script integrates it into speed and distance (solving for the thrust that ends the trip exactly at Jupiter) and bakes them.
 > * Effects: procedural afterburner and retro-rocket shaders, and rainbow light bands whose speed follows the plane's.
+> * Clocks: the pilot's and Earth's clocks, speed, gamma and distance are Geometry Nodes text (Format String to String to Curves) driven by the baked motion, so they update every frame with no Python at render time.
 >
-> Rendered in EEVEE. Assets: CC0 F-15 model (Sketchfab, mgg8), NASA SVS Deep Star Maps, Blue Marble, CGI Moon Kit and Cassini Jupiter map, HYG star catalog (CC BY-SA 4.0).
+> Rendered in EEVEE. Music: "Space Galaxy Universe" by Dmitrii Spis (Pixabay). RenderJuice logo from the contest's logo pack. Assets: CC0 F-15 model (Sketchfab, mgg8), NASA SVS Deep Star Maps, Blue Marble, CGI Moon Kit and Cassini Jupiter map, HYG star catalog (CC BY-SA 4.0).
 
 **WIP image:** one of the contact sheets in [progress.md](progress.md), or a screenshot of the Geometry Nodes star field in Blender, which also shows the procedural workflow.
 
