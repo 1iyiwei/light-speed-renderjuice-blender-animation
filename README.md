@@ -1,5 +1,10 @@
 # [⁠RenderJuice "Speed" Blender animation (5-30 sec)](https://www.renderjuice.com/contests/speed)
 
+<p>
+  <a href="https://youtu.be/4M4FqIFfBvA"><img src="https://img.youtube.com/vi/4M4FqIFfBvA/mqdefault.jpg" height="180"></a>
+  <a href="demos/blender-screenshot.png"><img src="demos/blender-screenshot.png" height="180"></a>
+</p>
+
 ## Title
 From Earth to Jupiter in 23 seconds
 
