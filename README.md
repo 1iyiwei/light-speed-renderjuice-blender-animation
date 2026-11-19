@@ -17,10 +17,14 @@ Some earlier alternatives:
 A vehicle moving faster and faster until it gets very close to the speed of light, with cool shape and background effects (relativity).
 The blender scene itself can be simple - just a vehicle (spaceship or plane) moving in a straight line, with background texture(s) (potentially multiple layers for parallax effects). The majority of the effects will come from procedural animation via shaders.
 
+## Reflection
+
+The science-heavy approach may be out of step with the contest's artistic focus.
+
 ## Progress
 
-WIP milestones, with contact sheets and the git tag of each, are logged in [docs/progress.md](docs/progress.md).
-Award strategy and the draft entry text are in [docs/submission.md](docs/submission.md).
+WIP milestones, with contact sheets or videos and the commit of each, are logged in [docs/progress.md](docs/progress.md).
+Award strategy and the entry text are in [docs/submission.md](docs/submission.md).
 
 ## Scene setup
 
@@ -90,8 +94,8 @@ The physics, script by script:
 * `build_afterburner.py`: afterburner flames on both nozzles (transparent cones with an additive emission shader: blue-white core cooling to orange, shock diamonds, flickering noise flowing down the plume) plus orange lights, and two forward-facing retro-rockets on the sides of the nose for braking, canted 12 degrees outward and 8 up, like thrust reversers, so they show from the chase camera as a narrow V.
   `F15["thrust"]` scales their brightness and length; `F15["burn_direction"]` picks which pair burns (+1 afterburners, -1 retro-rockets).
   The afterburners are the "pushing forward" cue: aberration contracts the sky toward the direction of travel, which on its own reads as flying backward.
-* `animate_speed.py`: the trip, Earth to Jupiter (4.2 AU) in 24.6 s at 30 fps, driven by thrust alone: a 1 s hold while the afterburners light, a 10 s burn with thrust (and flame) growing from 0.6 to 1.4, a 1 s coast with the engines off, a mirrored 10 s braking burn on the retro-rockets, and 2 s at rest at Jupiter.
-  It bakes `F15["rapidity"]` (d phi / d tau = rate x thrust x `F15["burn_direction"]`, the animation clock being the pilot's proper time) and `F15["distance_km"]` (the distance flown in the stars' frame, growing as c sinh phi), solving for the rate that makes the trip end at Jupiter: peak gamma is about 700, so the sky ahead collapses to a point, then unwinds while braking.
+* `animate_speed.py`: the trip, Earth to Jupiter (4.2 AU), 26.6 s at 30 fps, driven by thrust alone: a 1 s hold while the afterburners light, a 10 s burn with thrust (and flame) growing from 0.6 to 1.4, a 1 s coast with the engines off, a mirrored 10 s braking burn on the retro-rockets (at rest after about 23 s of the pilot's time), and 4 s at rest at Jupiter for the end card.
+  It bakes `F15["rapidity"]` (d phi / d tau = rate x thrust x `F15["burn_direction"]`, the animation clock being the pilot's proper time) `F15["distance_km"]` (the distance flown in the stars' frame, growing as c sinh phi) and `F15["earth_time_s"]` (Earth's clock, growing as cosh phi: about 35 minutes), solving for the rate that makes the trip end at Jupiter: peak gamma is about 700, so the sky ahead collapses to a point, then unwinds while braking.
   `F15["beta"]` is driven from the rapidity, for reading only.
 * `build_earth_moon.py`: real-scale Earth (with an atmosphere shell), Moon and Jupiter, at rest in the stars' frame.
   The plane skims over the Atlantic toward Africa and leaves the Earth behind, passes the Moon about 28,000 km away at about 3 s, and stops 500,000 km in front of Jupiter (Great Red Spot facing it).
